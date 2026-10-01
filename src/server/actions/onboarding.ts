@@ -28,7 +28,7 @@ const onboardingSchema = z.object({
 });
 
 export async function completeOnboardingAction(input: unknown) {
-  return runAction(onboardingSchema, input, async (data) => {
+  return runAction(onboardingSchema, input, async (data, userId) => {
     const parse = (text: string, currency: string, field: string) => {
       try {
         return text ? parseMoney(text, currency) : 0n;
@@ -36,7 +36,7 @@ export async function completeOnboardingAction(input: unknown) {
         throw new DomainError((e as Error).message, field);
       }
     };
-    const result = await completeOnboarding(db, {
+    const result = await completeOnboarding(db, userId, {
       account: {
         name: data.account.name,
         type: data.account.type as AccountType,

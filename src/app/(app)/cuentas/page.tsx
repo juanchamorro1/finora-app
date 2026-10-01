@@ -5,6 +5,7 @@ import { CreateAccountDialog } from "@/components/accounts/account-dialogs";
 import { AccountRow } from "@/components/accounts/account-row";
 import { Money } from "@/components/shared/money";
 import { PageHeader, SectionHeader } from "@/components/shared/page-header";
+import { requirePageUser } from "@/server/auth/guard";
 import { db } from "@/server/db";
 import { toAccountOption } from "@/server/mappers";
 import { getNetWorth, listAccounts } from "@/server/services/accounts";
@@ -12,7 +13,8 @@ import { getNetWorth, listAccounts } from "@/server/services/accounts";
 export const metadata: Metadata = { title: "Cuentas" };
 
 export default async function AccountsPage() {
-  const [accounts, worth] = await Promise.all([listAccounts(db, { includeInactive: true }), getNetWorth(db)]);
+  const user = await requirePageUser();
+  const [accounts, worth] = await Promise.all([listAccounts(db, user.id, { includeInactive: true }), getNetWorth(db, user.id)]);
   const active = accounts.filter((a) => a.isActive);
   const inactive = accounts.filter((a) => !a.isActive);
 

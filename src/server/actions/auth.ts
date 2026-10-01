@@ -4,33 +4,48 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyPassword } from "../auth/password";
 import { SESSION_COOKIE, authMode, createSessionToken } from "../auth/session";
+import { db } from "../db";
 
-// Freno simple contra intentos repetidos (por instancia del servidor).
-let failures = 0;
-let lockedUntil = 0;
+// Freno simple contra intentos repetidos, por usuario (por instancia del servidor).
+const attempts = new Map<string, { failures: number; lockedUntil: number }>();
+const MAX_FAILURES = 5;
+const LOCK_MS = 60_000;
 
-export async function loginAction(_prev: { error?: string } | undefined, formData: FormData): Promise<{ error?: string }> {
+export type LoginState = { error?: string; username?: string } | undefined;
+
+export async function loginAction(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const mode = authMode();
   if (mode === "disabled") redirect("/");
-  if (mode === "misconfigured") return { error: "La app no tiene contraseña configurada (revisa las variables de entorno)." };
+  if (mode === "misconfigured") return { error: "La app no está configurada (falta FINORA_SESSION_SECRET)." };
 
-  if (Date.now() < lockedUntil) {
-    return { error: "Demasiados intentos. Espera un minuto e inténtalo de nuevo." };
-  }
+  const username = String(formData.get("username") ?? "").trim().toLowerCase().slice(0, 30);
   const password = String(formData.get("password") ?? "");
-  const ok = password.length > 0 && password.length <= 200 && (await verifyPassword(password, process.env.FINORA_PASSWORD_HASH!));
-  if (!ok) {
-    failures++;
-    if (failures >= 5) {
-      lockedUntil = Date.now() + 60_000;
-      failures = 0;
-    }
-    await new Promise((r) => setTimeout(r, 700));
-    return { error: "Contraseña incorrecta." };
+  const state = attempts.get(username) ?? { failures: 0, lockedUntil: 0 };
+  if (Date.now() < state.lockedUntil) {
+    return { username, error: "Demasiados intentos. Espera un minuto e inténtalo de nuevo." };
   }
 
-  failures = 0;
-  const { value, expires } = await createSessionToken();
+  const user = username ? await db.user.findUnique({ where: { username } }) : null;
+  // Se verifica aunque el usuario no exista para no revelar qué usuarios existen.
+  const valid =
+    password.length > 0 &&
+    password.length <= 200 &&
+    (await verifyPassword(password, user?.passwordHash ?? "scrypt:00:00")) &&
+    user !== null;
+
+  if (!valid || !user) {
+    state.failures++;
+    if (state.failures >= MAX_FAILURES) {
+      state.failures = 0;
+      state.lockedUntil = Date.now() + LOCK_MS;
+    }
+    attempts.set(username, state);
+    await new Promise((r) => setTimeout(r, 700));
+    return { username, error: "Usuario o contraseña incorrectos." };
+  }
+
+  attempts.delete(username);
+  const { value, expires } = await createSessionToken(user.id);
   (await cookies()).set(SESSION_COOKIE, value, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

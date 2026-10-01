@@ -70,28 +70,29 @@ export function computeBudgetStatus(
   };
 }
 
-export async function listBudgets(db: Db | DbTx) {
+export async function listBudgets(db: Db | DbTx, userId: string) {
   return db.budget.findMany({
+    where: { category: { userId } },
     include: { category: { select: { id: true, name: true, icon: true, color: true, isArchived: true } } },
     orderBy: { category: { sortOrder: "asc" } },
   });
 }
 
-export async function getBudgetSummary(db: Db | DbTx, monthFlows: Flow[]): Promise<BudgetSummary> {
-  return computeBudgetStatus(await listBudgets(db), monthFlows);
+export async function getBudgetSummary(db: Db | DbTx, userId: string, monthFlows: Flow[]): Promise<BudgetSummary> {
+  return computeBudgetStatus(await listBudgets(db, userId), monthFlows);
 }
 
 /** Crea o actualiza el presupuesto mensual de una categoría de gasto. */
-export async function setBudget(db: Db | DbTx, categoryId: string, amount: bigint) {
+export async function setBudget(db: Db | DbTx, userId: string, categoryId: string, amount: bigint) {
   assertDomain(amount > 0n, "El presupuesto debe ser mayor a 0", "amount");
-  const category = await db.category.findUnique({ where: { id: categoryId } });
+  const category = await db.category.findFirst({ where: { id: categoryId, userId } });
   assertDomain(category, "La categoría no existe", "categoryId");
   assertDomain(category.kind === "EXPENSE", "Solo se pueden presupuestar categorías de gasto", "categoryId");
   return db.budget.upsert({ where: { categoryId }, create: { categoryId, amount }, update: { amount } });
 }
 
-export async function deleteBudget(db: Db | DbTx, id: string) {
-  const budget = await db.budget.findUnique({ where: { id } });
+export async function deleteBudget(db: Db | DbTx, userId: string, id: string) {
+  const budget = await db.budget.findFirst({ where: { id, category: { userId } } });
   assertDomain(budget, "El presupuesto no existe");
   await db.budget.delete({ where: { id } });
 }

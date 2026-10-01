@@ -20,10 +20,21 @@ export interface AccountWithBalance {
   transactionCount: number;
 }
 
-export async function listAccounts(db: Db, opts: { includeInactive?: boolean } = {}): Promise<AccountWithBalance[]> {
+/** Cuenta del usuario o error "no existe" (nunca revela cuentas de otros). */
+export async function getOwnAccount(db: Db | DbTx, userId: string, id: string, field?: string) {
+  const account = await db.account.findFirst({ where: { id, userId } });
+  assertDomain(account, "La cuenta no existe", field);
+  return account;
+}
+
+export async function listAccounts(
+  db: Db,
+  userId: string,
+  opts: { includeInactive?: boolean } = {},
+): Promise<AccountWithBalance[]> {
   const [accounts, balances, rates] = await Promise.all([
     db.account.findMany({
-      where: opts.includeInactive ? undefined : { isActive: true },
+      where: { userId, ...(opts.includeInactive ? {} : { isActive: true }) },
       orderBy: [{ isActive: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
       include: {
         _count: {
@@ -34,8 +45,8 @@ export async function listAccounts(db: Db, opts: { includeInactive?: boolean } =
         },
       },
     }),
-    computeBalances(db),
-    getRateTable(db),
+    computeBalances(db, userId),
+    getRateTable(db, userId),
   ]);
   return accounts.map((a) => {
     const balance = balances.get(a.id) ?? 0n;
@@ -62,9 +73,8 @@ export interface NetWorth {
   missingRates: string[];
 }
 
-export async function getNetWorth(db: Db): Promise<NetWorth> {
-  const accounts = await listAccounts(db);
-  const rates = await getRateTable(db);
+export async function getNetWorth(db: Db, userId: string): Promise<NetWorth> {
+  const [accounts, rates] = await Promise.all([listAccounts(db, userId), getRateTable(db, userId)]);
   const byCurrency = new Map<string, bigint>();
   for (const a of accounts) byCurrency.set(a.currency, (byCurrency.get(a.currency) ?? 0n) + a.balance);
   const missingRates = [...byCurrency.keys()].filter((c) => !rates.has(c));
@@ -86,8 +96,8 @@ export interface CreateAccountInput {
   openingDate?: Date;
 }
 
-async function assertNameAvailable(db: Db | DbTx, name: string, exceptId?: string) {
-  const accounts = await db.account.findMany({ select: { id: true, name: true } });
+async function assertNameAvailable(db: Db | DbTx, userId: string, name: string, exceptId?: string) {
+  const accounts = await db.account.findMany({ where: { userId }, select: { id: true, name: true } });
   const clash = accounts.find((a) => a.id !== exceptId && sameName(a.name, name));
   if (clash) throw new DomainError(`Ya existe una cuenta llamada "${name}"`, "name");
 }
@@ -96,20 +106,21 @@ async function assertNameAvailable(db: Db | DbTx, name: string, exceptId?: strin
  * Crea una cuenta. El saldo inicial se registra como movimiento OPENING_BALANCE,
  * que afecta el saldo pero NO cuenta como ingreso.
  */
-export async function createAccount(db: Db | DbTx, input: CreateAccountInput) {
+export async function createAccount(db: Db | DbTx, userId: string, input: CreateAccountInput) {
   const name = input.name.trim();
   assertDomain(name.length > 0, "El nombre es obligatorio", "name");
   assertDomain(isCurrencyCode(input.currency), "Moneda no soportada", "currency");
-  await assertNameAvailable(db, name);
+  await assertNameAvailable(db, userId, name);
 
   return withTx(db, async (tx) => {
-    const last = await tx.account.findFirst({ orderBy: { sortOrder: "desc" } });
+    const last = await tx.account.findFirst({ where: { userId }, orderBy: { sortOrder: "desc" } });
     const account = await tx.account.create({
-      data: { name, type: input.type, currency: input.currency, sortOrder: (last?.sortOrder ?? 0) + 1 },
+      data: { userId, name, type: input.type, currency: input.currency, sortOrder: (last?.sortOrder ?? 0) + 1 },
     });
     if (input.openingBalance !== 0n) {
       await tx.transaction.create({
         data: {
+          userId,
           type: "OPENING_BALANCE",
           amount: input.openingBalance,
           accountId: account.id,
@@ -125,27 +136,26 @@ export async function createAccount(db: Db | DbTx, input: CreateAccountInput) {
 /** La moneda no se puede cambiar si la cuenta ya tiene movimientos. */
 export async function updateAccount(
   db: Db,
+  userId: string,
   id: string,
   input: { name: string; type: AccountType; currency: string },
 ) {
-  const account = await db.account.findUnique({ where: { id } });
-  assertDomain(account, "La cuenta no existe");
+  const account = await getOwnAccount(db, userId, id);
   const name = input.name.trim();
   assertDomain(name.length > 0, "El nombre es obligatorio", "name");
   assertDomain(isCurrencyCode(input.currency), "Moneda no soportada", "currency");
-  await assertNameAvailable(db, name, id);
+  await assertNameAvailable(db, userId, name, id);
   if (input.currency !== account.currency) {
     const count = await db.transaction.count({
-      where: { OR: [{ accountId: id }, { toAccountId: id }] },
+      where: { userId, OR: [{ accountId: id }, { toAccountId: id }] },
     });
     assertDomain(count === 0, "No puedes cambiar la moneda de una cuenta con movimientos", "currency");
   }
   return db.account.update({ where: { id }, data: { name, type: input.type, currency: input.currency } });
 }
 
-export async function setAccountActive(db: Db, id: string, isActive: boolean) {
-  const account = await db.account.findUnique({ where: { id } });
-  assertDomain(account, "La cuenta no existe");
+export async function setAccountActive(db: Db, userId: string, id: string, isActive: boolean) {
+  await getOwnAccount(db, userId, id);
   return db.account.update({ where: { id }, data: { isActive } });
 }
 
@@ -153,21 +163,21 @@ export async function setAccountActive(db: Db, id: string, isActive: boolean) {
  * Registra un ajuste para que el saldo coincida con el real (ej. el banco dice X).
  * Queda como movimiento ADJUSTMENT visible en el historial; no es ingreso ni gasto.
  */
-export async function reconcileBalance(db: Db, id: string, actualBalance: bigint, date: Date = new Date()) {
-  const account = await db.account.findUnique({ where: { id } });
-  assertDomain(account, "La cuenta no existe");
+export async function reconcileBalance(db: Db, userId: string, id: string, actualBalance: bigint, date: Date = new Date()) {
+  await getOwnAccount(db, userId, id);
   return withTx(db, async (tx) => {
-    const current = await computeBalance(tx, id);
+    const current = await computeBalance(tx, userId, id);
     const diff = actualBalance - current;
     if (diff === 0n) return null;
     return tx.transaction.create({
-      data: { type: "ADJUSTMENT", amount: diff, accountId: id, date, description: "Ajuste de saldo" },
+      data: { userId, type: "ADJUSTMENT", amount: diff, accountId: id, date, description: "Ajuste de saldo" },
     });
   });
 }
 
 /** Solo se elimina una cuenta sin ningún movimiento (ni en la papelera); si no, se desactiva. */
-export async function deleteAccount(db: Db, id: string) {
+export async function deleteAccount(db: Db, userId: string, id: string) {
+  await getOwnAccount(db, userId, id);
   const count = await db.transaction.count({ where: { OR: [{ accountId: id }, { toAccountId: id }] } });
   if (count > 0) {
     throw new DomainError("La cuenta tiene movimientos. Desactívala en lugar de eliminarla.");

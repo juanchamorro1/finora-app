@@ -18,8 +18,8 @@ export interface OnboardingInput {
 /**
  * Configuración inicial en una sola transacción: si algo falla no queda nada a medias.
  */
-export async function completeOnboarding(db: Db, input: OnboardingInput) {
-  assertDomain(!(await isOnboardingCompleted(db)), "La configuración inicial ya se completó");
+export async function completeOnboarding(db: Db, userId: string, input: OnboardingInput) {
+  assertDomain(!(await isOnboardingCompleted(db, userId)), "La configuración inicial ya se completó");
   assertDomain(
     input.defaultCategories.some((c) => c.kind === "EXPENSE") || input.customCategories.some((c) => c.kind === "EXPENSE"),
     "Necesitas al menos una categoría de gasto",
@@ -37,8 +37,8 @@ export async function completeOnboarding(db: Db, input: OnboardingInput) {
     for (const cat of DEFAULT_CATEGORIES) {
       if (!wanted.has(`${cat.kind}:${cat.name}`)) continue;
       await tx.category.upsert({
-        where: { name_kind: { name: cat.name, kind: cat.kind } },
-        create: { ...cat, isDefault: true, sortOrder: order++ },
+        where: { userId_name_kind: { userId, name: cat.name, kind: cat.kind } },
+        create: { ...cat, userId, isDefault: true, sortOrder: order++ },
         update: { isArchived: false },
       });
     }
@@ -51,17 +51,17 @@ export async function completeOnboarding(db: Db, input: OnboardingInput) {
       if (!name || created.some((c) => c.kind === custom.kind && sameName(c.name, name))) continue;
       created.push({ name, kind: custom.kind });
       await tx.category.upsert({
-        where: { name_kind: { name, kind: custom.kind } },
-        create: { name, kind: custom.kind, sortOrder: order++ },
+        where: { userId_name_kind: { userId, name, kind: custom.kind } },
+        create: { userId, name, kind: custom.kind, sortOrder: order++ },
         update: {},
       });
     }
 
-    const account = await createAccount(tx, input.account);
+    const account = await createAccount(tx, userId, input.account);
     if (input.goal) {
-      await createGoal(tx, { ...input.goal, accountId: account.id });
+      await createGoal(tx, userId, { ...input.goal, accountId: account.id });
     }
-    await markOnboardingCompleted(tx);
+    await markOnboardingCompleted(tx, userId);
     return { accountId: account.id };
   });
 }

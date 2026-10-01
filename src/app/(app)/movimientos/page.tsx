@@ -9,6 +9,7 @@ import { AddTransactionButton } from "@/components/transactions/add-transaction-
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
 import { TransactionList } from "@/components/transactions/transaction-list";
 import { cn } from "@/lib/utils";
+import { requirePageUser } from "@/server/auth/guard";
 import { db } from "@/server/db";
 import { parseTransactionFilters } from "@/server/filters";
 import { toTransactionRow } from "@/server/mappers";
@@ -19,9 +20,10 @@ export const metadata: Metadata = { title: "Movimientos" };
 const PAGE_SIZE = 50;
 
 export default async function MovementsPage({ searchParams }: PageProps<"/movimientos">) {
+  const user = await requirePageUser();
   const params = await searchParams;
   const { page, ...filters } = parseTransactionFilters(params);
-  const { items, total } = await searchTransactions(db, filters, { take: PAGE_SIZE, skip: (page - 1) * PAGE_SIZE });
+  const { items, total } = await searchTransactions(db, user.id, filters, { take: PAGE_SIZE, skip: (page - 1) * PAGE_SIZE });
   const rows = items.map(toTransactionRow);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const hasQuery = Boolean(filters.q || filters.type || filters.categoryId || filters.accountId || filters.from || filters.to || filters.minAmount !== undefined || filters.maxAmount !== undefined);

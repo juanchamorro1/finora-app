@@ -10,5 +10,6 @@
 - Saldo derivado del libro (`services/ledger.ts`); nunca agregar un campo de saldo editable.
 - Si se regenera una tabla en una migración de SQLite, revisar que las CHECK constraints sigan presentes (`integrity.test.ts` lo verifica).
 - Base: adaptador libSQL (`file:` local o Turso `libsql://` en producción). Local: `data/finora.db`; nube: ver README. Para probar usar `npm run dev:demo` (data/demo.db) — nunca sembrar datos en la base real.
-- Auth de un solo usuario (`src/server/auth`): proxy + `requirePageSession` en layouts + `requireActionSession` en `runAction`. Toda página nueva bajo `(app)` queda protegida; páginas fuera de `(app)` deben llamar `requirePageSession()`.
+- Multiusuario con datos privados: TODA consulta y servicio recibe `userId` y filtra por él; los registros por id se buscan con `findFirst({ where: { id, userId } })` (nunca `findUnique({ id })`). `isolation.test.ts` lo verifica: agrega casos al crear servicios nuevos.
+- Auth (`src/server/auth`): cookie firmada con el userId; proxy + `requirePageUser()` en páginas + `runAction` (entrega `userId` a cada acción). Usuarios: `npm run users`.
 - Verificar con `npm run typecheck`, `npm run lint`, `npm test` y `npm run build`.

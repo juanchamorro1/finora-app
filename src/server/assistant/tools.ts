@@ -37,7 +37,7 @@ interface AssistantTool<S extends z.ZodType> {
   name: string;
   description: string;
   input: S;
-  run: (db: Db, input: z.output<S>, now: Date) => Promise<unknown>;
+  run: (db: Db, userId: string, input: z.output<S>, now: Date) => Promise<unknown>;
 }
 
 function tool<S extends z.ZodType>(t: AssistantTool<S>) {
@@ -49,9 +49,9 @@ export const assistantTools = [
     name: "get_spending_summary",
     description: "Ingresos, gastos y ahorro de un periodo. Responde '¿Cuánto gasté este mes?'.",
     input: periodInput,
-    async run(db, { period }, now) {
+    async run(db, userId, { period }, now) {
       const range = resolvePeriod(period, { now });
-      const { flows, excludedCurrencies } = await loadFlows(db, range);
+      const { flows, excludedCurrencies } = await loadFlows(db, userId, range);
       const t = totals(flows);
       return { period: range.label, income: money(t.income), expenses: money(t.expense), savings: money(t.net), excludedCurrencies };
     },
@@ -60,9 +60,9 @@ export const assistantTools = [
     name: "get_top_expense_categories",
     description: "Categorías en las que más se gastó en un periodo. Responde '¿En qué gasto más?'.",
     input: periodInput.extend({ limit: z.number().int().min(1).max(10).default(5) }),
-    async run(db, { period, limit }, now) {
+    async run(db, userId, { period, limit }, now) {
       const range = resolvePeriod(period, { now });
-      const { flows } = await loadFlows(db, range);
+      const { flows } = await loadFlows(db, userId, range);
       return byCategory(flows, "EXPENSE")
         .slice(0, limit)
         .map((c) => ({ category: c.name, total: money(c.total), sharePercent: c.share, transactions: c.count }));
@@ -73,10 +73,10 @@ export const assistantTools = [
     description:
       "Cuánto se puede gastar en lo que queda de semana según los presupuestos del mes. Responde '¿Cuánto puedo gastar esta semana?'.",
     input: z.object({}),
-    async run(db, _input, now) {
+    async run(db, userId, _input, now) {
       const month = currentMonthRange(now);
-      const { flows } = await loadFlows(db, month);
-      const summary = await getBudgetSummary(db, flows);
+      const { flows } = await loadFlows(db, userId, month);
+      const summary = await getBudgetSummary(db, userId, flows);
       if (summary.budgets.length === 0) return { available: false, reason: "No hay presupuestos definidos." };
       const today = startOfDay(now);
       const daysLeftInMonth = Math.max(1, Math.round((month.to.getTime() - today.getTime()) / 86_400_000));
@@ -99,8 +99,8 @@ export const assistantTools = [
     description:
       "Progreso de las metas de ahorro y cuánto ahorrar por mes/semana para llegar a tiempo. Responde '¿Cómo voy con mi meta?' y '¿Cuánto debería ahorrar?'.",
     input: z.object({ name: z.string().optional().describe("Filtra por nombre de meta (opcional)") }),
-    async run(db, { name }, now) {
-      const goals = await listGoals(db, { now });
+    async run(db, userId, { name }, now) {
+      const goals = await listGoals(db, userId, { now });
       return goals
         .filter((g) => !name || g.name.toLowerCase().includes(name.toLowerCase()))
         .map((g) => ({
@@ -122,9 +122,9 @@ export const assistantTools = [
     name: "get_ant_expenses",
     description: "Posibles gastos hormiga (gastos pequeños y frecuentes) de un periodo. Responde '¿Cuánto gasté en gastos hormiga?'.",
     input: periodInput,
-    async run(db, { period }, now) {
+    async run(db, userId, { period }, now) {
       const range = resolvePeriod(period, { now });
-      const [{ flows }, threshold] = await Promise.all([loadFlows(db, range), getAntThreshold(db)]);
+      const [{ flows }, threshold] = await Promise.all([loadFlows(db, userId, range), getAntThreshold(db, userId)]);
       const a = analyzeAntExpenses(flows, threshold, range, now);
       return {
         period: range.label,
@@ -141,8 +141,8 @@ export const assistantTools = [
     name: "get_net_worth",
     description: "Dinero total en las cuentas activas y desglose por moneda.",
     input: z.object({}),
-    async run(db) {
-      const w = await getNetWorth(db);
+    async run(db, userId) {
+      const w = await getNetWorth(db, userId);
       return {
         totalCOP: money(w.totalBase),
         byCurrency: w.byCurrency.map((c) => ({ currency: c.currency, total: formatMoney(c.total, c.currency) })),
@@ -159,10 +159,10 @@ export function assistantToolDefinitions() {
   return assistantTools.map((t) => ({ name: t.name, description: t.description, input_schema: z.toJSONSchema(t.input) }));
 }
 
-/** Ejecuta una herramienta validando su entrada. */
-export async function runAssistantTool(db: Db, name: string, input: unknown, now: Date = new Date()) {
+/** Ejecuta una herramienta validando su entrada, siempre sobre los datos de `userId`. */
+export async function runAssistantTool(db: Db, userId: string, name: string, input: unknown, now: Date = new Date()) {
   const t = assistantTools.find((x) => x.name === name);
   if (!t) throw new Error(`Herramienta desconocida: ${name}`);
   const parsed = t.input.parse(input ?? {});
-  return (t.run as (db: Db, input: unknown, now: Date) => Promise<unknown>)(db, parsed, now);
+  return (t.run as (db: Db, userId: string, input: unknown, now: Date) => Promise<unknown>)(db, userId, parsed, now);
 }

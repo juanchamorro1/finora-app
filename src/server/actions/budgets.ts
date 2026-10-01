@@ -13,16 +13,16 @@ const budgetSchema = z.object({
 });
 
 export async function setBudgetAction(input: unknown) {
-  return runAction(budgetSchema, input, async (data) => {
-    const budget = await setBudget(db, data.categoryId, parseMoney(data.amount));
+  return runAction(budgetSchema, input, async (data, userId) => {
+    const budget = await setBudget(db, userId, data.categoryId, parseMoney(data.amount));
     revalidatePath("/", "layout");
     return { id: budget.id };
   });
 }
 
 export async function deleteBudgetAction(id: string) {
-  return runAction(z.string().min(1), id, async (budgetId) => {
-    await deleteBudget(db, budgetId);
+  return runAction(z.string().min(1), id, async (budgetId, userId) => {
+    await deleteBudget(db, userId, budgetId);
     revalidatePath("/", "layout");
     return { id: budgetId };
   });

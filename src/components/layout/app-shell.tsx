@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { Menu, Plus } from "lucide-react";
+import { LogOut, Menu, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useTransactionDialog } from "@/components/transactions/transaction-dialog-provider";
 import { cn } from "@/lib/utils";
+import { logoutAction } from "@/server/actions/auth";
 import { NAV_ITEMS, isActive } from "./nav-items";
 
 function Brand() {
@@ -47,7 +48,34 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+/** Nombre del usuario y botón para cerrar sesión (solo si hay inicio de sesión activo). */
+function UserBox({ name, canLogout }: { name: string; canLogout: boolean }) {
+  return (
+    <div className="mt-auto flex items-center gap-2 border-t border-border/60 px-1 pt-4">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">
+        {name.trim().charAt(0).toUpperCase()}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
+      {canLogout && (
+        <form action={logoutAction}>
+          <Button type="submit" variant="ghost" size="icon-sm" aria-label="Cerrar sesión" title="Cerrar sesión">
+            <LogOut />
+          </Button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+export function AppShell({
+  children,
+  userName,
+  canLogout,
+}: {
+  children: ReactNode;
+  userName: string;
+  canLogout: boolean;
+}) {
   const { openCreate } = useTransactionDialog();
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -62,6 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Plus /> Añadir movimiento
         </Button>
         <NavLinks />
+        <UserBox name={userName} canLogout={canLogout} />
       </aside>
 
       {/* Encabezado (móvil) */}
@@ -105,12 +134,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       </nav>
 
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent side="left" className="w-72 p-4">
+        <SheetContent side="left" className="flex w-72 flex-col p-4">
           <SheetHeader className="p-0 pb-4">
             <SheetTitle className="sr-only">Menú</SheetTitle>
             <Brand />
           </SheetHeader>
           <NavLinks onNavigate={() => setMoreOpen(false)} />
+          <UserBox name={userName} canLogout={canLogout} />
         </SheetContent>
       </Sheet>
     </div>

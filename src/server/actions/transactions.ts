@@ -20,12 +20,12 @@ import { runAction } from "./run-action";
 type FormData = z.output<typeof transactionFormSchema>;
 
 /** Convierte los textos del formulario a montos según la moneda de cada cuenta. */
-async function toInput(data: FormData): Promise<TransactionInput> {
-  const account = await db.account.findUnique({ where: { id: data.accountId } });
+async function toInput(userId: string, data: FormData): Promise<TransactionInput> {
+  const account = await db.account.findFirst({ where: { id: data.accountId, userId } });
   if (!account) throw new DomainError("La cuenta no existe", "accountId");
   let toAmount: bigint | null = null;
   if (data.type === "TRANSFER" && data.toAccountId && data.toAmount) {
-    const toAccount = await db.account.findUnique({ where: { id: data.toAccountId } });
+    const toAccount = await db.account.findFirst({ where: { id: data.toAccountId, userId } });
     if (toAccount && toAccount.currency !== account.currency) {
       try {
         toAmount = parseMoney(data.toAmount, toAccount.currency);
@@ -52,16 +52,16 @@ function revalidateAll() {
 }
 
 export async function createTransactionAction(input: unknown) {
-  return runAction(transactionFormSchema, input, async (data) => {
-    const tx = await createTransaction(db, await toInput(data));
+  return runAction(transactionFormSchema, input, async (data, userId) => {
+    const tx = await createTransaction(db, userId, await toInput(userId, data));
     revalidateAll();
     return { id: tx.id };
   });
 }
 
 export async function updateTransactionAction(id: string, input: unknown) {
-  return runAction(transactionFormSchema, input, async (data) => {
-    const tx = await updateTransaction(db, id, await toInput(data));
+  return runAction(transactionFormSchema, input, async (data, userId) => {
+    const tx = await updateTransaction(db, userId, id, await toInput(userId, data));
     revalidateAll();
     return { id: tx.id };
   });
@@ -70,24 +70,24 @@ export async function updateTransactionAction(id: string, input: unknown) {
 const idSchema = z.string().min(1);
 
 export async function trashTransactionAction(id: string) {
-  return runAction(idSchema, id, async (txId) => {
-    await trashTransaction(db, txId);
+  return runAction(idSchema, id, async (txId, userId) => {
+    await trashTransaction(db, userId, txId);
     revalidateAll();
     return { id: txId };
   });
 }
 
 export async function restoreTransactionAction(id: string) {
-  return runAction(idSchema, id, async (txId) => {
-    await restoreTransaction(db, txId);
+  return runAction(idSchema, id, async (txId, userId) => {
+    await restoreTransaction(db, userId, txId);
     revalidateAll();
     return { id: txId };
   });
 }
 
 export async function purgeTransactionAction(id: string) {
-  return runAction(idSchema, id, async (txId) => {
-    await purgeTransaction(db, txId);
+  return runAction(idSchema, id, async (txId, userId) => {
+    await purgeTransaction(db, userId, txId);
     revalidateAll();
     return { id: txId };
   });

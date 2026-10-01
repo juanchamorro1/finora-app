@@ -9,18 +9,21 @@ import { formatDate } from "@/lib/dates";
 import { formatAmountInput, formatRate } from "@/lib/money";
 import { logoutAction } from "@/server/actions/auth";
 import { authMode } from "@/server/auth/session";
+import { requirePageUser } from "@/server/auth/guard";
 import { db } from "@/server/db";
 import { listCategoriesWithUsage } from "@/server/services/categories";
+import { listExchangeRates } from "@/server/services/exchange-rates";
 import { getAntThreshold } from "@/server/services/settings";
 
 export const metadata: Metadata = { title: "Ajustes" };
 
 export default async function SettingsPage() {
+  const user = await requirePageUser();
   const [categories, threshold, rates, accounts] = await Promise.all([
-    listCategoriesWithUsage(db),
-    getAntThreshold(db),
-    db.exchangeRate.findMany(),
-    db.account.findMany({ select: { currency: true } }),
+    listCategoriesWithUsage(db, user.id),
+    getAntThreshold(db, user.id),
+    listExchangeRates(db, user.id),
+    db.account.findMany({ where: { userId: user.id }, select: { currency: true } }),
   ]);
   const foreign = [...new Set(accounts.map((a) => a.currency).filter((c) => c !== BASE_CURRENCY))];
 

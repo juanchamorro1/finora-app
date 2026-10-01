@@ -11,6 +11,7 @@ import { Money } from "@/components/shared/money";
 import { PageHeader, SectionHeader } from "@/components/shared/page-header";
 import { addDays, formatDate, formatMonthKeyShort, formatShortDate, dateKeyToStartOfDay, toDateKey } from "@/lib/dates";
 import { cn } from "@/lib/utils";
+import { requirePageUser } from "@/server/auth/guard";
 import { db } from "@/server/db";
 import { parsePeriodParams } from "@/server/period-params";
 import { getStatistics } from "@/server/services/statistics";
@@ -18,8 +19,9 @@ import { getStatistics } from "@/server/services/statistics";
 export const metadata: Metadata = { title: "Estadísticas" };
 
 export default async function StatisticsPage({ searchParams }: PageProps<"/estadisticas">) {
+  const user = await requirePageUser();
   const period = parsePeriodParams(await searchParams);
-  const s = await getStatistics(db, period);
+  const s = await getStatistics(db, user.id, period);
   const fromKey = toDateKey(period.from);
   const toKey = toDateKey(addDays(period.to, -1));
   const empty = s.totals.incomeCount + s.totals.expenseCount === 0;

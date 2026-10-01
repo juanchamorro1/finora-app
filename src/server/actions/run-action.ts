@@ -2,21 +2,22 @@ import { z } from "zod";
 import { fail, ok, type ActionFailure, type ActionResult } from "@/lib/action-result";
 import { MoneyParseError } from "@/lib/money";
 import { zodFieldErrors } from "@/lib/validation";
-import { UnauthorizedError, requireActionSession } from "../auth/guard";
+import { UnauthorizedError, requireActionUser } from "../auth/guard";
 import { DomainError } from "../errors";
 
 /**
- * Envoltorio común para Server Actions: valida la entrada con Zod, ejecuta la
- * operación y convierte los errores conocidos en un ActionResult legible.
+ * Envoltorio común para Server Actions: exige sesión, valida la entrada con Zod,
+ * ejecuta la operación con el id del usuario actual y convierte los errores conocidos en un ActionResult legible.
  * Los errores inesperados se registran y se muestran como un mensaje genérico.
  */
 export async function runAction<S extends z.ZodType, T>(
   schema: S,
   input: unknown,
-  fn: (data: z.output<S>) => Promise<T>,
+  fn: (data: z.output<S>, userId: string) => Promise<T>,
 ): Promise<ActionResult<T>> {
+  let userId: string;
   try {
-    await requireActionSession();
+    userId = await requireActionUser();
   } catch (error) {
     return toFailure(error);
   }
@@ -25,7 +26,7 @@ export async function runAction<S extends z.ZodType, T>(
     return fail("Revisa los campos marcados", zodFieldErrors(parsed.error));
   }
   try {
-    return ok(await fn(parsed.data));
+    return ok(await fn(parsed.data, userId));
   } catch (error) {
     return toFailure(error);
   }

@@ -8,8 +8,24 @@ import { loginAction } from "@/server/actions/auth";
 
 export function LoginForm({ misconfigured }: { misconfigured: boolean }) {
   const [state, formAction, pending] = useActionState(loginAction, undefined);
+  const error = state?.error ?? (misconfigured ? "La app no está configurada." : undefined);
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="username">Usuario</Label>
+        <Input
+          id="username"
+          name="username"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          autoFocus
+          required
+          defaultValue={state?.username}
+          className="h-10"
+        />
+      </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="password">Contraseña</Label>
         <Input
@@ -17,14 +33,13 @@ export function LoginForm({ misconfigured }: { misconfigured: boolean }) {
           name="password"
           type="password"
           autoComplete="current-password"
-          autoFocus
           required
           aria-invalid={Boolean(state?.error) || undefined}
           className="h-10"
         />
-        {(state?.error || misconfigured) && (
+        {error && (
           <p role="alert" className="text-sm text-destructive">
-            {state?.error ?? "La app no tiene contraseña configurada."}
+            {error}
           </p>
         )}
       </div>

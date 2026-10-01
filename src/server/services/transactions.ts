@@ -41,6 +41,7 @@ export type TransactionWithRelations = Prisma.TransactionGetPayload<{ include: t
  */
 async function normalize(
   db: Db | DbTx,
+  userId: string,
   input: TransactionInput,
   existing?: TransactionWithRelations,
 ): Promise<Prisma.TransactionUncheckedCreateInput> {
@@ -48,7 +49,8 @@ async function normalize(
   assertDomain(input.amount > 0n, "El monto debe ser mayor a 0", "amount");
   assertDomain(!Number.isNaN(input.date.getTime()), "Fecha inválida", "date");
 
-  const account = await db.account.findUnique({ where: { id: input.accountId } });
+  // Las cuentas y categorías deben ser del mismo usuario.
+  const account = await db.account.findFirst({ where: { id: input.accountId, userId } });
   assertDomain(account, "La cuenta no existe", "accountId");
   // Permite editar movimientos antiguos de una cuenta ya desactivada, pero no crear nuevos.
   const accountChanged = existing?.accountId !== input.accountId;
@@ -60,7 +62,7 @@ async function normalize(
   if (input.type === "TRANSFER") {
     assertDomain(input.toAccountId, "Selecciona la cuenta destino", "toAccountId");
     assertDomain(input.toAccountId !== input.accountId, "La cuenta destino debe ser diferente a la de origen", "toAccountId");
-    const toAccount = await db.account.findUnique({ where: { id: input.toAccountId } });
+    const toAccount = await db.account.findFirst({ where: { id: input.toAccountId, userId } });
     assertDomain(toAccount, "La cuenta destino no existe", "toAccountId");
     const toChanged = existing?.toAccountId !== input.toAccountId;
     assertDomain(toAccount.isActive || !toChanged, `La cuenta "${toAccount.name}" está inactiva`, "toAccountId");
@@ -77,6 +79,7 @@ async function normalize(
     const description = input.description?.trim() || `${account.name} → ${toAccount.name}`;
     assertDomain(description.length <= DESCRIPTION_MAX, `Máximo ${DESCRIPTION_MAX} caracteres`, "description");
     return {
+      userId,
       type: "TRANSFER",
       amount: input.amount,
       accountId: account.id,
@@ -90,7 +93,7 @@ async function normalize(
   }
 
   assertDomain(input.categoryId, "Selecciona una categoría", "categoryId");
-  const category = await db.category.findUnique({ where: { id: input.categoryId } });
+  const category = await db.category.findFirst({ where: { id: input.categoryId, userId } });
   assertDomain(category, "La categoría no existe", "categoryId");
   assertDomain(
     category.kind === input.type,
@@ -103,6 +106,7 @@ async function normalize(
   const description = input.description?.trim() || category.name;
   assertDomain(description.length <= DESCRIPTION_MAX, `Máximo ${DESCRIPTION_MAX} caracteres`, "description");
   return {
+    userId,
     type: input.type,
     amount: input.amount,
     accountId: account.id,
@@ -115,45 +119,50 @@ async function normalize(
   };
 }
 
-export async function createTransaction(db: Db, input: TransactionInput): Promise<TransactionWithRelations> {
+export async function createTransaction(db: Db, userId: string, input: TransactionInput): Promise<TransactionWithRelations> {
   return withTx(db, async (tx) => {
-    const data = await normalize(tx, input);
+    const data = await normalize(tx, userId, input);
     return tx.transaction.create({ data, include: transactionInclude });
   });
 }
 
-export async function getTransaction(db: Db | DbTx, id: string): Promise<TransactionWithRelations | null> {
-  return db.transaction.findUnique({ where: { id }, include: transactionInclude });
+export async function getTransaction(db: Db | DbTx, userId: string, id: string): Promise<TransactionWithRelations | null> {
+  return db.transaction.findFirst({ where: { id, userId }, include: transactionInclude });
 }
 
-export async function updateTransaction(db: Db, id: string, input: TransactionInput): Promise<TransactionWithRelations> {
+export async function updateTransaction(
+  db: Db,
+  userId: string,
+  id: string,
+  input: TransactionInput,
+): Promise<TransactionWithRelations> {
   return withTx(db, async (tx) => {
-    const existing = await getTransaction(tx, id);
+    const existing = await getTransaction(tx, userId, id);
     assertDomain(existing && !existing.deletedAt, "El movimiento no existe o está en la papelera");
     if (existing.type === "OPENING_BALANCE" || existing.type === "ADJUSTMENT") {
       throw new DomainError("Los saldos iniciales y ajustes se modifican desde la cuenta");
     }
-    const data = await normalize(tx, input, existing);
+    const data = await normalize(tx, userId, input, existing);
     return tx.transaction.update({ where: { id }, data, include: transactionInclude });
   });
 }
 
 /** Envía el movimiento a la papelera (recuperable). El saldo se recalcula solo. */
-export async function trashTransaction(db: Db, id: string) {
-  const existing = await db.transaction.findUnique({ where: { id } });
+export async function trashTransaction(db: Db, userId: string, id: string) {
+  const existing = await db.transaction.findFirst({ where: { id, userId } });
   assertDomain(existing && !existing.deletedAt, "El movimiento no existe o ya está en la papelera");
   return db.transaction.update({ where: { id }, data: { deletedAt: new Date() } });
 }
 
-export async function restoreTransaction(db: Db, id: string) {
-  const existing = await db.transaction.findUnique({ where: { id } });
+export async function restoreTransaction(db: Db, userId: string, id: string) {
+  const existing = await db.transaction.findFirst({ where: { id, userId } });
   assertDomain(existing?.deletedAt, "El movimiento no está en la papelera");
   return db.transaction.update({ where: { id }, data: { deletedAt: null } });
 }
 
 /** Borrado definitivo: solo desde la papelera. */
-export async function purgeTransaction(db: Db, id: string) {
-  const existing = await db.transaction.findUnique({ where: { id } });
+export async function purgeTransaction(db: Db, userId: string, id: string) {
+  const existing = await db.transaction.findFirst({ where: { id, userId } });
   assertDomain(existing?.deletedAt, "Solo se pueden eliminar definitivamente movimientos de la papelera");
   await db.transaction.delete({ where: { id } });
 }
@@ -176,8 +185,8 @@ export interface TransactionFilters {
   trashed?: boolean;
 }
 
-export function buildTransactionWhere(f: TransactionFilters): Prisma.TransactionWhereInput {
-  const and: Prisma.TransactionWhereInput[] = [f.trashed ? { deletedAt: { not: null } } : ACTIVE_TX];
+export function buildTransactionWhere(userId: string, f: TransactionFilters): Prisma.TransactionWhereInput {
+  const and: Prisma.TransactionWhereInput[] = [{ userId }, f.trashed ? { deletedAt: { not: null } } : ACTIVE_TX];
   if (f.type) and.push({ type: f.type });
   if (f.categoryId) and.push({ categoryId: f.categoryId });
   if (f.accountId) and.push({ OR: [{ accountId: f.accountId }, { toAccountId: f.accountId }] });
@@ -213,10 +222,11 @@ export function buildTransactionWhere(f: TransactionFilters): Prisma.Transaction
 
 export async function searchTransactions(
   db: Db,
+  userId: string,
   filters: TransactionFilters,
   page: { take?: number; skip?: number } = {},
 ): Promise<{ items: TransactionWithRelations[]; total: number }> {
-  const where = buildTransactionWhere(filters);
+  const where = buildTransactionWhere(userId, filters);
   const [items, total] = await Promise.all([
     db.transaction.findMany({
       where,
@@ -230,6 +240,6 @@ export async function searchTransactions(
   return { items, total };
 }
 
-export async function recentTransactions(db: Db, take = 6) {
-  return (await searchTransactions(db, {}, { take })).items;
+export async function recentTransactions(db: Db, userId: string, take = 6) {
+  return (await searchTransactions(db, userId, {}, { take })).items;
 }

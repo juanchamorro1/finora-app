@@ -28,10 +28,10 @@ export interface FlowSet {
   excludedCurrencies: string[];
 }
 
-export async function loadFlows(db: Db | DbTx, range: DateRange): Promise<FlowSet> {
+export async function loadFlows(db: Db | DbTx, userId: string, range: DateRange): Promise<FlowSet> {
   const [rows, rates] = await Promise.all([
     db.transaction.findMany({
-      where: { deletedAt: null, type: { in: ["INCOME", "EXPENSE"] }, date: { gte: range.from, lt: range.to } },
+      where: { userId, deletedAt: null, type: { in: ["INCOME", "EXPENSE"] }, date: { gte: range.from, lt: range.to } },
       select: {
         id: true,
         type: true,
@@ -44,7 +44,7 @@ export async function loadFlows(db: Db | DbTx, range: DateRange): Promise<FlowSe
       },
       orderBy: { date: "asc" },
     }),
-    getRateTable(db),
+    getRateTable(db, userId),
   ]);
   const flows: Flow[] = [];
   const excluded = new Set<string>();

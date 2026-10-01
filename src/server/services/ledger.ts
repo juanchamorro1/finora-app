@@ -30,22 +30,24 @@ export function signedEffect(type: TransactionType, amount: bigint): bigint {
   }
 }
 
-/** Saldos de todas las cuentas (o de las indicadas), en unidades mínimas de cada cuenta. */
+/** Saldos de las cuentas del usuario (o de las indicadas), en unidades mínimas de cada cuenta. */
 export async function computeBalances(
   db: Db | DbTx,
+  userId: string,
   opts: { accountIds?: string[]; before?: Date } = {},
 ): Promise<Map<string, bigint>> {
   const dateFilter = opts.before ? { date: { lt: opts.before } } : {};
   const [outgoing, incoming] = await Promise.all([
     db.transaction.groupBy({
       by: ["accountId", "type"],
-      where: { ...ACTIVE_TX, ...dateFilter, accountId: opts.accountIds ? { in: opts.accountIds } : undefined },
+      where: { ...ACTIVE_TX, userId, ...dateFilter, accountId: opts.accountIds ? { in: opts.accountIds } : undefined },
       _sum: { amount: true },
     }),
     db.transaction.groupBy({
       by: ["toAccountId"],
       where: {
         ...ACTIVE_TX,
+        userId,
         ...dateFilter,
         type: "TRANSFER",
         toAccountId: opts.accountIds ? { in: opts.accountIds } : { not: null },
@@ -63,6 +65,6 @@ export async function computeBalances(
   return balances;
 }
 
-export async function computeBalance(db: Db | DbTx, accountId: string): Promise<bigint> {
-  return (await computeBalances(db, { accountIds: [accountId] })).get(accountId) ?? 0n;
+export async function computeBalance(db: Db | DbTx, userId: string, accountId: string): Promise<bigint> {
+  return (await computeBalances(db, userId, { accountIds: [accountId] })).get(accountId) ?? 0n;
 }

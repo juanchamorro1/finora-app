@@ -6,19 +6,23 @@ import { assertDomain } from "../errors";
 /** Tasas "COP por 1 unidad" (×1e6) indexadas por moneda. COP siempre = 1. */
 export type RateTable = Map<string, bigint>;
 
-export async function getRateTable(db: Db | DbTx): Promise<RateTable> {
-  const rows = await db.exchangeRate.findMany();
+export async function getRateTable(db: Db | DbTx, userId: string): Promise<RateTable> {
+  const rows = await db.exchangeRate.findMany({ where: { userId } });
   const table: RateTable = new Map(rows.map((r) => [r.currency, r.rateMicros]));
   table.set(BASE_CURRENCY, 1_000_000n);
   return table;
 }
 
-export async function setExchangeRate(db: Db | DbTx, currency: string, rateMicros: bigint) {
+export async function listExchangeRates(db: Db | DbTx, userId: string) {
+  return db.exchangeRate.findMany({ where: { userId } });
+}
+
+export async function setExchangeRate(db: Db | DbTx, userId: string, currency: string, rateMicros: bigint) {
   assertDomain(currency !== BASE_CURRENCY, "La moneda principal no necesita tasa");
   assertDomain(rateMicros > 0n, "La tasa debe ser mayor a 0");
   return db.exchangeRate.upsert({
-    where: { currency },
-    create: { currency, rateMicros },
+    where: { userId_currency: { userId, currency } },
+    create: { userId, currency, rateMicros },
     update: { rateMicros },
   });
 }

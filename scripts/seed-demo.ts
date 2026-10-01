@@ -29,7 +29,7 @@ const between = (min: number, max: number, step = 100) => BigInt(Math.round((min
 
 async function main() {
   const db = createDb(url);
-  const existing = await db.account.count();
+  const existing = await db.user.count();
   if (existing > 0) {
     console.error("La base de demo ya tiene datos. Bórrala (data/<nombre>.db) y vuelve a ejecutar.");
     process.exit(1);
@@ -40,25 +40,27 @@ async function main() {
   const start = localMidnight(year, month - 5, 1);
   const noon = (d: Date) => new Date(d.getTime() + 12 * 3_600_000);
 
-  await ensureDefaultCategories(db);
-  const cat = Object.fromEntries((await db.category.findMany()).map((c) => [`${c.kind}:${c.name}`, c.id]));
-  const bank = (await createAccount(db, { name: "Bancolombia", type: "BANK", currency: "COP", openingBalance: 850_000n, openingDate: start })).id;
-  const nequi = (await createAccount(db, { name: "Nequi", type: "DIGITAL_WALLET", currency: "COP", openingBalance: 60_000n, openingDate: start })).id;
-  const cash = (await createAccount(db, { name: "Efectivo", type: "CASH", currency: "COP", openingBalance: 40_000n, openingDate: start })).id;
-  await createAccount(db, { name: "Binance", type: "CRYPTO", currency: "USDT", openingBalance: 12_000n, openingDate: start });
-  await setExchangeRate(db, "USDT", 3_950_000_000n);
+  // Usuario de demostración (sin contraseña utilizable; en local no se pide inicio de sesión).
+  const uid = (await db.user.create({ data: { username: "demo", name: "Demo", passwordHash: "DEMO" } })).id;
+  await ensureDefaultCategories(db, uid);
+  const cat = Object.fromEntries((await db.category.findMany({ where: { userId: uid } })).map((c) => [`${c.kind}:${c.name}`, c.id]));
+  const bank = (await createAccount(db, uid, { name: "Bancolombia", type: "BANK", currency: "COP", openingBalance: 850_000n, openingDate: start })).id;
+  const nequi = (await createAccount(db, uid, { name: "Nequi", type: "DIGITAL_WALLET", currency: "COP", openingBalance: 60_000n, openingDate: start })).id;
+  const cash = (await createAccount(db, uid, { name: "Efectivo", type: "CASH", currency: "COP", openingBalance: 40_000n, openingDate: start })).id;
+  await createAccount(db, uid, { name: "Binance", type: "CRYPTO", currency: "USDT", openingBalance: 12_000n, openingDate: start });
+  await setExchangeRate(db, uid, "USDT", 3_950_000_000n);
 
   const expense = (amount: bigint, category: string, date: Date, accountId: string, description?: string) =>
-    createTransaction(db, { type: "EXPENSE", amount, accountId, categoryId: cat[`EXPENSE:${category}`], date: noon(date), description });
+    createTransaction(db, uid, { type: "EXPENSE", amount, accountId, categoryId: cat[`EXPENSE:${category}`], date: noon(date), description });
   const income = (amount: bigint, category: string, date: Date, accountId: string, description?: string) =>
-    createTransaction(db, { type: "INCOME", amount, accountId, categoryId: cat[`INCOME:${category}`], date: noon(date), description });
+    createTransaction(db, uid, { type: "INCOME", amount, accountId, categoryId: cat[`INCOME:${category}`], date: noon(date), description });
 
   for (let day = start; day <= now; day = addDays(day, 1)) {
     const { day: dom, weekday } = localParts(day);
     if (dom === 1) await income(800_000n, "Dinero familiar", day, bank, "Mesada mensual");
     if (dom === 15) await income(between(250_000, 450_000, 10_000), "Freelance", day, nequi, "Proyecto freelance");
-    if (dom === 2) await createTransaction(db, { type: "TRANSFER", amount: 150_000n, accountId: bank, toAccountId: nequi, date: noon(day) });
-    if (dom === 1 || dom === 16) await createTransaction(db, { type: "TRANSFER", amount: 200_000n, accountId: nequi, toAccountId: cash, date: noon(day), description: "Retiro cajero" });
+    if (dom === 2) await createTransaction(db, uid, { type: "TRANSFER", amount: 150_000n, accountId: bank, toAccountId: nequi, date: noon(day) });
+    if (dom === 1 || dom === 16) await createTransaction(db, uid, { type: "TRANSFER", amount: 200_000n, accountId: nequi, toAccountId: cash, date: noon(day), description: "Retiro cajero" });
     if (dom === 3) await expense(32_900n, "Suscripciones", day, bank, "Spotify + iCloud");
     if (dom === 5) await expense(between(60_000, 110_000, 1_000), "Educación", day, bank, "Curso en línea");
     if (weekday >= 1 && weekday <= 5) {
@@ -72,17 +74,17 @@ async function main() {
     if (dom === 20 && rand() < 0.5) await expense(between(40_000, 90_000, 1_000), "Salud", day, bank, "Droguería");
   }
 
-  await setBudget(db, cat["EXPENSE:Comida"], 300_000n);
-  await setBudget(db, cat["EXPENSE:Entretenimiento"], 100_000n);
-  await setBudget(db, cat["EXPENSE:Transporte"], 80_000n);
-  await setBudget(db, cat["EXPENSE:Gastos hormiga"], 60_000n);
+  await setBudget(db, uid, cat["EXPENSE:Comida"], 300_000n);
+  await setBudget(db, uid, cat["EXPENSE:Entretenimiento"], 100_000n);
+  await setBudget(db, uid, cat["EXPENSE:Transporte"], 80_000n);
+  await setBudget(db, uid, cat["EXPENSE:Gastos hormiga"], 60_000n);
 
-  const pc = await createGoal(db, { name: "PC nueva", targetAmount: 2_000_000n, targetDate: localMidnight(year + 1, 12, 31), accountId: bank, initialSaved: 350_000n }, start);
-  for (let i = 1; i <= 5; i++) await addContribution(db, pc.id, between(60_000, 120_000, 10_000), { date: noon(localMidnight(year, month - 5 + i, 10)) });
-  await createGoal(db, { name: "Fondo de emergencia", targetAmount: 1_500_000n, initialSaved: 420_000n, accountId: nequi }, start);
+  const pc = await createGoal(db, uid, { name: "PC nueva", targetAmount: 2_000_000n, targetDate: localMidnight(year + 1, 12, 31), accountId: bank, initialSaved: 350_000n }, start);
+  for (let i = 1; i <= 5; i++) await addContribution(db, uid, pc.id, between(60_000, 120_000, 10_000), { date: noon(localMidnight(year, month - 5 + i, 10)) });
+  await createGoal(db, uid, { name: "Fondo de emergencia", targetAmount: 1_500_000n, initialSaved: 420_000n, accountId: nequi }, start);
   
 
-  await markOnboardingCompleted(db);
+  await markOnboardingCompleted(db, uid);
   console.log(`Datos de demo creados (${await db.transaction.count()} movimientos).`);
   await db.$disconnect();
 }

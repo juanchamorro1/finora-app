@@ -17,9 +17,10 @@
     "dev:demo": "node scripts/with-db.mjs demo next dev --port 3001",
     "demo:seed": "node scripts/with-db.mjs demo tsx scripts/seed-demo.ts",
     "start:demo": "node scripts/with-db.mjs demo next start --port 3002",
-    "auth:hash": "node scripts/hash-password.mjs",
     "turso:migrate": "node scripts/turso.mjs migrate",
-    "turso:import": "node scripts/turso.mjs import"
+    "turso:import": "node scripts/turso.mjs import",
+    "users": "node scripts/users.mjs",
+    "turso:backup": "node scripts/turso.mjs backup"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

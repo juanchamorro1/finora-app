@@ -7,7 +7,13 @@ import { createDb, type Db } from "../db-client";
 const MIGRATIONS_DIR = path.resolve(__dirname, "../../../prisma/migrations");
 
 /** Crea una BD SQLite temporal con todas las migraciones reales aplicadas. */
-export async function createTestDb(): Promise<{ db: Db; raw: Database.Database; cleanup: () => Promise<void> }> {
+export async function createTestDb(): Promise<{
+  db: Db;
+  raw: Database.Database;
+  /** Usuario de prueba ya creado. */
+  userId: string;
+  cleanup: () => Promise<void>;
+}> {
   const dir = mkdtempSync(path.join(tmpdir(), "finora-test-"));
   const file = path.join(dir, "test.db");
   const raw = new Database(file);
@@ -20,9 +26,11 @@ export async function createTestDb(): Promise<{ db: Db; raw: Database.Database; 
     raw.exec(readFileSync(path.join(MIGRATIONS_DIR, name, "migration.sql"), "utf8"));
   }
   const db = createDb(`file:${file}`);
+  const userId = await createTestUser(db, "prueba");
   return {
     db,
     raw,
+    userId,
     cleanup: async () => {
       await db.$disconnect();
       raw.close();
@@ -33,4 +41,10 @@ export async function createTestDb(): Promise<{ db: Db; raw: Database.Database; 
       }
     },
   };
+}
+
+/** Crea un usuario (sin contraseña utilizable) y devuelve su id. */
+export async function createTestUser(db: Db, username: string): Promise<string> {
+  const user = await db.user.create({ data: { username, name: username, passwordHash: "TEST" } });
+  return user.id;
 }

@@ -6,13 +6,14 @@
  *   TURSO_DATABASE_URL=libsql://<tu-base>.turso.io
  *   TURSO_AUTH_TOKEN=<token>
  *
+ *   npm run turso:backup           copia de seguridad de la nube en data/ (JSON)
  *   npm run turso:migrate          aplica las migraciones pendientes
  *   npm run turso:import           copia data/finora.db a Turso (solo si Turso está vacía)
  */
 import { createClient } from "@libsql/client";
 import Database from "better-sqlite3";
 import { config } from "dotenv";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 config({ path: ".env.turso", quiet: true });
@@ -23,7 +24,7 @@ if (!url || (url.startsWith("libsql://") ? !authToken : !url.startsWith("file:")
   console.error("Falta .env.turso con TURSO_DATABASE_URL (libsql://…) y TURSO_AUTH_TOKEN.");
   process.exit(1);
 }
-const remote = createClient({ url, authToken });
+const remote = createClient({ url, authToken, intMode: "bigint" });
 const command = process.argv[2];
 
 async function migrate() {
@@ -46,7 +47,7 @@ async function migrate() {
 }
 
 // Orden que respeta las claves foráneas.
-const TABLES = ["Account", "Category", "Transaction", "Budget", "SavingsGoal", "GoalContribution", "ExchangeRate", "Setting"];
+const TABLES = ["User", "Account", "Category", "Transaction", "Budget", "SavingsGoal", "GoalContribution", "ExchangeRate", "Setting"];
 
 async function importLocal(file = "data/finora.db") {
   if (!existsSync(file)) throw new Error(`No existe ${file}`);
@@ -75,11 +76,25 @@ async function importLocal(file = "data/finora.db") {
   console.log("✓ datos copiados:", counts);
 }
 
+/** Copia de seguridad completa de la nube en data/respaldo-nube-<fecha>.json. */
+async function backup() {
+  const tables = (await remote.execute(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)).rows.map((r) => r.name);
+  const dump = { createdAt: new Date().toISOString(), tables: {} };
+  for (const table of tables) {
+    const { rows, columns } = await remote.execute(`SELECT * FROM "${table}"`);
+    dump.tables[table] = rows.map((r) => Object.fromEntries(columns.map((c, i) => [c, typeof r[i] === "bigint" ? r[i].toString() : r[i]])));
+  }
+  const file = `data/respaldo-nube-${dump.createdAt.replace(/[:.]/g, "-")}.json`;
+  writeFileSync(file, JSON.stringify(dump, null, 2));
+  console.log(`✓ respaldo guardado en ${file}:`, Object.fromEntries(Object.entries(dump.tables).map(([t, r]) => [t, r.length])));
+}
+
 try {
-  if (command === "migrate") await migrate();
+  if (command === "backup") await backup();
+  else if (command === "migrate") await migrate();
   else if (command === "import") await importLocal(process.argv[3]);
   else {
-    console.error("Uso: node scripts/turso.mjs <migrate|import>");
+    console.error("Uso: node scripts/turso.mjs <backup|migrate|import>");
     process.exit(1);
   }
 } catch (e) {

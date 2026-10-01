@@ -11,6 +11,7 @@ import { Money } from "@/components/shared/money";
 import { PageHeader, SectionHeader } from "@/components/shared/page-header";
 import { formatMonth, localParts, monthRange } from "@/lib/dates";
 import { percentOf } from "@/lib/money";
+import { requirePageUser } from "@/server/auth/guard";
 import { db } from "@/server/db";
 import { byCategory, loadFlows } from "@/server/services/analytics";
 import { budgetLevel, getBudgetSummary } from "@/server/services/budgets";
@@ -31,6 +32,7 @@ const key = (y: number, m: number) => {
 };
 
 export default async function BudgetsPage({ searchParams }: PageProps<"/presupuestos">) {
+  const user = await requirePageUser();
   const now = new Date();
   const { year, month } = parseMonth((await searchParams).mes, now);
   const current = localParts(now);
@@ -38,10 +40,10 @@ export default async function BudgetsPage({ searchParams }: PageProps<"/presupue
   const range = monthRange(year, month);
 
   const [{ flows }, expenseCategories] = await Promise.all([
-    loadFlows(db, range),
-    listCategories(db, { kind: "EXPENSE" }),
+    loadFlows(db, user.id, range),
+    listCategories(db, user.id, { kind: "EXPENSE" }),
   ]);
-  const summary = await getBudgetSummary(db, flows);
+  const summary = await getBudgetSummary(db, user.id, flows);
   const budgeted = new Set(summary.budgets.map((b) => b.category.id));
   const available = expenseCategories.filter((c) => !budgeted.has(c.id)).map((c) => ({ id: c.id, name: c.name }));
   const unbudgetedSpending = byCategory(flows, "EXPENSE").filter((c) => !budgeted.has(c.categoryId));

@@ -17,8 +17,11 @@ import { getAntThreshold } from "./settings";
  * Estadísticas de un periodo. Es la misma fuente que usará el asistente de IA
  * ("¿en qué gasto más?", "¿cuánto gasté este mes?", etc.).
  */
-export async function getStatistics(db: Db, range: DateRange, now: Date = new Date()) {
-  const [{ flows, excludedCurrencies }, antThreshold] = await Promise.all([loadFlows(db, range), getAntThreshold(db)]);
+export async function getStatistics(db: Db, userId: string, range: DateRange, now: Date = new Date()) {
+  const [{ flows, excludedCurrencies }, antThreshold] = await Promise.all([
+    loadFlows(db, userId, range),
+    getAntThreshold(db, userId),
+  ]);
   const t = totals(flows);
   const expenseCategories = byCategory(flows, "EXPENSE");
   return {

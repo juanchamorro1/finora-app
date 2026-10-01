@@ -13,6 +13,19 @@ export interface GoalInput {
   initialSaved?: bigint;
 }
 
+/** La cuenta asociada (opcional) debe ser del mismo usuario. */
+async function assertOwnAccount(db: Db | DbTx, userId: string, accountId?: string | null) {
+  if (!accountId) return;
+  const account = await db.account.findFirst({ where: { id: accountId, userId } });
+  assertDomain(account, "La cuenta no existe", "accountId");
+}
+
+async function getOwnGoal(db: Db | DbTx, userId: string, id: string) {
+  const goal = await db.savingsGoal.findFirst({ where: { id, userId } });
+  assertDomain(goal, "La meta no existe");
+  return goal;
+}
+
 function validateGoal(input: GoalInput) {
   const name = input.name.trim();
   assertDomain(name.length > 0, "El nombre es obligatorio", "name");
@@ -21,13 +34,15 @@ function validateGoal(input: GoalInput) {
   return name;
 }
 
-export async function createGoal(db: Db | DbTx, input: GoalInput, now: Date = new Date()) {
+export async function createGoal(db: Db | DbTx, userId: string, input: GoalInput, now: Date = new Date()) {
   const name = validateGoal(input);
   const initial = input.initialSaved ?? 0n;
   assertDomain(initial >= 0n, "El monto ahorrado no puede ser negativo", "initialSaved");
+  await assertOwnAccount(db, userId, input.accountId);
   return withTx(db, async (tx) => {
     const goal = await tx.savingsGoal.create({
       data: {
+        userId,
         name,
         targetAmount: input.targetAmount,
         targetDate: input.targetDate ?? null,
@@ -45,11 +60,17 @@ export async function createGoal(db: Db | DbTx, input: GoalInput, now: Date = ne
   });
 }
 
-export async function updateGoal(db: Db | DbTx, id: string, input: Omit<GoalInput, "initialSaved">, now = new Date()) {
+export async function updateGoal(
+  db: Db | DbTx,
+  userId: string,
+  id: string,
+  input: Omit<GoalInput, "initialSaved">,
+  now = new Date(),
+) {
   const name = validateGoal(input);
+  await assertOwnAccount(db, userId, input.accountId);
   return withTx(db, async (tx) => {
-    const goal = await tx.savingsGoal.findUnique({ where: { id } });
-    assertDomain(goal, "La meta no existe");
+    const goal = await getOwnGoal(tx, userId, id);
     const saved = await savedAmount(tx, id);
     const reached = saved >= input.targetAmount;
     return tx.savingsGoal.update({
@@ -79,6 +100,7 @@ async function savedAmount(db: Db | DbTx, goalId: string): Promise<bigint> {
  */
 export async function addContribution(
   db: Db | DbTx,
+  userId: string,
   goalId: string,
   amount: bigint,
   opts: { date?: Date; note?: string | null } = {},
@@ -87,8 +109,7 @@ export async function addContribution(
   const note = opts.note?.trim() || null;
   assertDomain(!note || note.length <= 200, "Máximo 200 caracteres", "note");
   return withTx(db, async (tx) => {
-    const goal = await tx.savingsGoal.findUnique({ where: { id: goalId } });
-    assertDomain(goal, "La meta no existe");
+    const goal = await getOwnGoal(tx, userId, goalId);
     assertDomain(goal.status !== "ARCHIVED", "La meta está archivada");
     const saved = await savedAmount(tx, goalId);
     assertDomain(saved + amount >= 0n, "No puedes retirar más de lo ahorrado en la meta", "amount");
@@ -105,10 +126,9 @@ export async function addContribution(
   });
 }
 
-export async function setGoalArchived(db: Db | DbTx, id: string, archived: boolean) {
+export async function setGoalArchived(db: Db | DbTx, userId: string, id: string, archived: boolean) {
   return withTx(db, async (tx) => {
-    const goal = await tx.savingsGoal.findUnique({ where: { id } });
-    assertDomain(goal, "La meta no existe");
+    const goal = await getOwnGoal(tx, userId, id);
     if (archived) return tx.savingsGoal.update({ where: { id }, data: { status: "ARCHIVED" } });
     const reached = (await savedAmount(tx, id)) >= goal.targetAmount;
     return tx.savingsGoal.update({ where: { id }, data: { status: reached ? "COMPLETED" : "ACTIVE" } });
@@ -116,9 +136,8 @@ export async function setGoalArchived(db: Db | DbTx, id: string, archived: boole
 }
 
 /** Elimina la meta y su historial de aportes (no afecta ninguna cuenta). */
-export async function deleteGoal(db: Db | DbTx, id: string) {
-  const goal = await db.savingsGoal.findUnique({ where: { id } });
-  assertDomain(goal, "La meta no existe");
+export async function deleteGoal(db: Db | DbTx, userId: string, id: string) {
+  await getOwnGoal(db, userId, id);
   await db.savingsGoal.delete({ where: { id } });
 }
 
@@ -214,10 +233,11 @@ export function computeGoalProgress(
 
 export async function listGoals(
   db: Db | DbTx,
+  userId: string,
   opts: { includeArchived?: boolean; now?: Date } = {},
 ): Promise<GoalProgress[]> {
   const goals = await db.savingsGoal.findMany({
-    where: opts.includeArchived ? undefined : { status: { not: "ARCHIVED" } },
+    where: { userId, ...(opts.includeArchived ? {} : { status: { not: "ARCHIVED" } }) },
     include: {
       account: { select: { id: true, name: true } },
       contributions: { select: { id: true, amount: true, date: true, note: true } },

@@ -11,12 +11,14 @@ import { TransactionList } from "@/components/transactions/transaction-list";
 import { formatMonth, formatMonthKeyShort } from "@/lib/dates";
 import { formatMoney, percentOf } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { requirePageUser } from "@/server/auth/guard";
 import { db } from "@/server/db";
 import { toTransactionRow } from "@/server/mappers";
 import { getDashboard } from "@/server/services/dashboard";
 
 export default async function DashboardPage() {
-  const d = await getDashboard(db);
+  const user = await requirePageUser();
+  const d = await getDashboard(db, user.id);
   const hasMovements = d.recent.length > 0;
   const chartHasData = d.chart.some((p) => p.income > 0n || p.expense > 0n);
 

@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { TransactionDialogProvider } from "@/components/transactions/transaction-dialog-provider";
-import { requirePageSession } from "@/server/auth/guard";
+import { requirePageUser } from "@/server/auth/guard";
+import { authMode } from "@/server/auth/session";
 import { db } from "@/server/db";
 import { toAccountOption, toCategoryOption } from "@/server/mappers";
 import { listAccounts } from "@/server/services/accounts";
@@ -12,17 +13,19 @@ import { isOnboardingCompleted } from "@/server/services/settings";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
-  await requirePageSession();
-  if (!(await isOnboardingCompleted(db))) redirect("/bienvenida");
+  const user = await requirePageUser();
+  if (!(await isOnboardingCompleted(db, user.id))) redirect("/bienvenida");
 
   const [accounts, categories] = await Promise.all([
-    listAccounts(db, { includeInactive: true }),
-    listCategories(db, { includeArchived: true }),
+    listAccounts(db, user.id, { includeInactive: true }),
+    listCategories(db, user.id, { includeArchived: true }),
   ]);
 
   return (
     <TransactionDialogProvider accounts={accounts.map(toAccountOption)} categories={categories.map(toCategoryOption)}>
-      <AppShell>{children}</AppShell>
+      <AppShell userName={user.name} canLogout={authMode() === "enabled"}>
+        {children}
+      </AppShell>
     </TransactionDialogProvider>
   );
 }

@@ -31,8 +31,8 @@ function revalidateAll() {
 }
 
 export async function createGoalAction(input: unknown) {
-  return runAction(goalSchema, input, async (data) => {
-    const goal = await createGoal(db, {
+  return runAction(goalSchema, input, async (data, userId) => {
+    const goal = await createGoal(db, userId, {
       name: data.name,
       targetAmount: money(data.targetAmount, "targetAmount"),
       initialSaved: money(data.initialSaved, "initialSaved"),
@@ -45,8 +45,8 @@ export async function createGoalAction(input: unknown) {
 }
 
 export async function updateGoalAction(id: string, input: unknown) {
-  return runAction(goalSchema.omit({ initialSaved: true }), input, async (data) => {
-    await updateGoal(db, id, {
+  return runAction(goalSchema.omit({ initialSaved: true }), input, async (data, userId) => {
+    await updateGoal(db, userId, id, {
       name: data.name,
       targetAmount: money(data.targetAmount, "targetAmount"),
       targetDate: data.targetDate ? dateKeyToInstant(data.targetDate) : null,
@@ -65,26 +65,26 @@ const contributionSchema = z.object({
 });
 
 export async function addContributionAction(input: unknown) {
-  return runAction(contributionSchema, input, async (data) => {
+  return runAction(contributionSchema, input, async (data, userId) => {
     const value = money(data.amount, "amount");
     if (value <= 0n) throw new DomainError("El monto debe ser mayor a 0", "amount");
-    const result = await addContribution(db, data.goalId, data.direction === "add" ? value : -value, { note: data.note });
+    const result = await addContribution(db, userId, data.goalId, data.direction === "add" ? value : -value, { note: data.note });
     revalidateAll();
     return { completed: result.completed };
   });
 }
 
 export async function setGoalArchivedAction(id: string, archived: boolean) {
-  return runAction(z.object({ id: z.string().min(1), archived: z.boolean() }), { id, archived }, async (d) => {
-    await setGoalArchived(db, d.id, d.archived);
+  return runAction(z.object({ id: z.string().min(1), archived: z.boolean() }), { id, archived }, async (d, userId) => {
+    await setGoalArchived(db, userId, d.id, d.archived);
     revalidateAll();
     return { id: d.id };
   });
 }
 
 export async function deleteGoalAction(id: string) {
-  return runAction(z.string().min(1), id, async (goalId) => {
-    await deleteGoal(db, goalId);
+  return runAction(z.string().min(1), id, async (goalId, userId) => {
+    await deleteGoal(db, userId, goalId);
     revalidateAll();
     return { id: goalId };
   });

@@ -47,3 +47,6 @@ next-env.d.ts
 /data/*.db-journal
 /data/*.db-wal
 /data/*.db-shm
+
+# respaldos de la nube (contienen tus datos)
+/data/*.json

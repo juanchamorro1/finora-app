@@ -6,6 +6,7 @@
 // - INCOME / EXPENSE / TRANSFER siempre tienen amount > 0; el signo lo da el tipo.
 // - OPENING_BALANCE / ADJUSTMENT llevan signo (≠ 0) y no cuentan como ingreso ni gasto.
 // - Los movimientos se eliminan de forma suave (deletedAt) y se pueden restaurar.
+// - Multiusuario: cada usuario ve SOLO sus datos. Los servicios siempre filtran por userId.
 
 generator client {
   provider = "prisma-client"
@@ -43,9 +44,31 @@ enum GoalStatus {
   ARCHIVED
 }
 
+/// Persona que usa Finora. Sus datos son privados.
+model User {
+  id           String   @id @default(cuid())
+  /// Nombre para iniciar sesión (minúsculas, sin espacios).
+  username     String   @unique
+  /// Nombre para mostrar.
+  name         String
+  /// "scrypt:<sal>:<hash>". Un valor sin ese formato bloquea el acceso hasta definir contraseña.
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  accounts     Account[]
+  categories   Category[]
+  transactions Transaction[]
+  goals        SavingsGoal[]
+  rates        ExchangeRate[]
+  settings     Setting[]
+}
+
 model Account {
   id        String      @id @default(cuid())
-  name      String      @unique
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
   type      AccountType
   /// Código ISO-4217 o de activo (COP, USD, USDT...).
   currency  String      @default("COP")
@@ -57,10 +80,15 @@ model Account {
   transactions      Transaction[]  @relation("TransactionAccount")
   incomingTransfers Transaction[]  @relation("TransferDestination")
   goals             SavingsGoal[]
+
+  @@unique([userId, name])
+  @@index([userId])
 }
 
 model Category {
   id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
   kind       CategoryKind
   /// Nombre de icono (lucide) usado por la UI.
@@ -75,11 +103,14 @@ model Category {
   transactions Transaction[]
   budget       Budget?
 
-  @@unique([name, kind])
+  @@unique([userId, name, kind])
+  @@index([userId])
 }
 
 model Transaction {
   id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   type        TransactionType
   /// Unidades mínimas de la moneda de `account`.
   amount      BigInt
@@ -101,7 +132,7 @@ model Transaction {
   updatedAt   DateTime        @updatedAt
   deletedAt   DateTime?
 
-  @@index([date])
+  @@index([userId, date])
   @@index([accountId])
   @@index([toAccountId])
   @@index([categoryId])
@@ -121,6 +152,8 @@ model Budget {
 
 model SavingsGoal {
   id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   name         String
   /// Objetivo en COP.
   targetAmount BigInt
@@ -134,6 +167,8 @@ model SavingsGoal {
   updatedAt    DateTime   @updatedAt
 
   contributions GoalContribution[]
+
+  @@index([userId])
 }
 
 model GoalContribution {
@@ -151,15 +186,23 @@ model GoalContribution {
 
 /// Tasa manual para convertir otras monedas a COP.
 model ExchangeRate {
-  currency   String   @id
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency   String
   /// COP por 1 unidad mayor de `currency`, escalado ×1.000.000.
   rateMicros BigInt
   updatedAt  DateTime @updatedAt
+
+  @@id([userId, currency])
 }
 
 /// Preferencias clave/valor (onboarding, umbral de gastos hormiga, etc.).
 model Setting {
-  key       String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
   value     String
   updatedAt DateTime @updatedAt
+
+  @@id([userId, key])
 }

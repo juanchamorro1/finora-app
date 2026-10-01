@@ -90,10 +90,23 @@ La app se publica en **Vercel** y los datos viven en **Turso** (SQLite en la nub
    TURSO_AUTH_TOKEN=<token>
    ```
 2. **Subir el esquema y tus datos:** `npm run turso:migrate` y luego `npm run turso:import` (copia `data/finora.db`; se niega si la nube ya tiene datos).
-3. **Contraseña:** `npm run auth:hash` genera `FINORA_PASSWORD_HASH` y `FINORA_SESSION_SECRET`.
+3. **Secreto de sesión:** `npm run users -- secret` genera `FINORA_SESSION_SECRET`.
 4. **Vercel:** `npx vercel login` y `npx vercel` (acepta los valores sugeridos). En el panel del proyecto → *Settings → Environment Variables* agrega:
-   `DATABASE_URL` (= TURSO_DATABASE_URL), `DATABASE_AUTH_TOKEN` (= TURSO_AUTH_TOKEN), `FINORA_PASSWORD_HASH`, `FINORA_SESSION_SECRET`.
+   `DATABASE_URL` (= TURSO_DATABASE_URL), `DATABASE_AUTH_TOKEN` (= TURSO_AUTH_TOKEN) y `FINORA_SESSION_SECRET`.
    Luego publica con `npx vercel --prod`.
-5. **Celular:** abre la URL de Vercel → menú del navegador → *Agregar a pantalla de inicio*.
+5. **Usuarios:** ver la sección siguiente.
+6. **Celular:** abre la URL de Vercel → menú del navegador → *Agregar a pantalla de inicio*.
 
-Desde ese momento la base de la nube es la principal: usa la URL de Vercel también en el PC. Para nuevas migraciones: `npm run db:migrate` (local) y después `npm run turso:migrate`.
+Desde ese momento la base de la nube es la principal: usa la URL de Vercel también en el PC. Para nuevas migraciones: `npm run db:migrate` (local), `npm run turso:backup` y después `npm run turso:migrate`.
+
+## Usuarios
+
+Cada persona tiene su usuario y ve **solo sus propias finanzas** (cuentas, movimientos, metas, presupuestos y ajustes). Las contraseñas se escriben ocultas y se guardan cifradas con scrypt.
+
+| Comando | Qué hace |
+|---|---|
+| `npm run users -- list --nube` | Lista los usuarios |
+| `npm run users -- add --nube` | Crea un usuario (pide usuario, nombre y contraseña) |
+| `npm run users -- password <usuario> --nube` | Cambia la contraseña |
+
+Sin `--nube` se usa la base local. En local (sin `FINORA_SESSION_SECRET`) la app no pide inicio de sesión y abre con el primer usuario.

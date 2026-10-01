@@ -11,6 +11,7 @@ import { DEFAULT_CATEGORIES } from "../services/defaults";
  */
 describe("integridad de la base de datos", () => {
   let db: Db;
+  let uid: string;
   let raw: Database.Database;
   let cleanup: () => Promise<void>;
   let accountA: string;
@@ -18,10 +19,10 @@ describe("integridad de la base de datos", () => {
   let expenseCat: string;
 
   beforeAll(async () => {
-    ({ db, raw, cleanup } = await createTestDb());
-    await ensureDefaultCategories(db);
-    accountA = (await db.account.create({ data: { name: "Bancolombia", type: "BANK" } })).id;
-    accountB = (await db.account.create({ data: { name: "Nequi", type: "DIGITAL_WALLET" } })).id;
+    ({ db, raw, cleanup, userId: uid } = await createTestDb());
+    await ensureDefaultCategories(db, uid);
+    accountA = (await db.account.create({ data: { userId: uid, name: "Bancolombia", type: "BANK" } })).id;
+    accountB = (await db.account.create({ data: { userId: uid, name: "Nequi", type: "DIGITAL_WALLET" } })).id;
     expenseCat = (await db.category.findFirstOrThrow({ where: { name: "Comida", kind: "EXPENSE" } })).id;
   });
   afterAll(() => cleanup());
@@ -29,6 +30,7 @@ describe("integridad de la base de datos", () => {
   const insert = (values: Record<string, unknown>) => {
     const row = {
       id: `t${Math.random()}`,
+      userId: uid,
       type: "EXPENSE",
       amount: 1000,
       accountId: accountA,
@@ -42,8 +44,8 @@ describe("integridad de la base de datos", () => {
     };
     raw
       .prepare(
-        `INSERT INTO "Transaction" (id,type,amount,accountId,toAccountId,toAmount,categoryId,date,description,updatedAt)
-         VALUES (@id,@type,@amount,@accountId,@toAccountId,@toAmount,@categoryId,@date,@description,@updatedAt)`,
+        `INSERT INTO "Transaction" (id,userId,type,amount,accountId,toAccountId,toAmount,categoryId,date,description,updatedAt)
+         VALUES (@id,@userId,@type,@amount,@accountId,@toAccountId,@toAmount,@categoryId,@date,@description,@updatedAt)`,
       )
       .run(row);
   };
@@ -87,14 +89,14 @@ describe("integridad de la base de datos", () => {
 
   it("crea las categorías predeterminadas una sola vez", async () => {
     expect(await db.category.count()).toBe(DEFAULT_CATEGORIES.length);
-    expect(await ensureDefaultCategories(db)).toBe(0);
+    expect(await ensureDefaultCategories(db, uid)).toBe(0);
   });
 
   it("no elimina categorías en uso y evita nombres duplicados", async () => {
-    await expect(deleteCategory(db, expenseCat)).rejects.toThrow(/Archívala/);
-    await expect(createCategory(db, { name: "Comida", kind: "EXPENSE" })).rejects.toThrow(/Ya existe/);
-    await expect(createCategory(db, { name: "educacion", kind: "EXPENSE" })).rejects.toThrow(/Ya existe/);
+    await expect(deleteCategory(db, uid, expenseCat)).rejects.toThrow(/Archívala/);
+    await expect(createCategory(db, uid, { name: "Comida", kind: "EXPENSE" })).rejects.toThrow(/Ya existe/);
+    await expect(createCategory(db, uid, { name: "educacion", kind: "EXPENSE" })).rejects.toThrow(/Ya existe/);
     // El mismo nombre sí puede existir como ingreso y como gasto ("Otros").
-    await expect(createCategory(db, { name: "Comida", kind: "INCOME" })).resolves.toBeTruthy();
+    await expect(createCategory(db, uid, { name: "Comida", kind: "INCOME" })).resolves.toBeTruthy();
   });
 });

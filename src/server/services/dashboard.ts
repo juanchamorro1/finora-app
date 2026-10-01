@@ -7,19 +7,19 @@ import { listGoals } from "./goals";
 import { recentTransactions } from "./transactions";
 
 /** Todo lo que necesita la pantalla principal, en una sola llamada. */
-export async function getDashboard(db: Db, now: Date = new Date()) {
+export async function getDashboard(db: Db, userId: string, now: Date = new Date()) {
   const month = currentMonthRange(now);
   const { year, month: m } = localParts(now);
   const chartRange = { from: localMidnight(year, m - 5, 1), to: month.to };
 
   const [netWorth, chartFlows, recent, goals] = await Promise.all([
-    getNetWorth(db),
-    loadFlows(db, chartRange),
-    recentTransactions(db, 6),
-    listGoals(db, { now }),
+    getNetWorth(db, userId),
+    loadFlows(db, userId, chartRange),
+    recentTransactions(db, userId, 6),
+    listGoals(db, userId, { now }),
   ]);
   const monthFlows = chartFlows.flows.filter((f) => f.date >= month.from && f.date < month.to);
-  const budgets = await getBudgetSummary(db, monthFlows);
+  const budgets = await getBudgetSummary(db, userId, monthFlows);
 
   return {
     netWorth,

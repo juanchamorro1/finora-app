@@ -6,6 +6,7 @@ import { GoalDialog } from "@/components/goals/goal-dialogs";
 import { GoalItem } from "@/components/goals/goal-item";
 import { Money } from "@/components/shared/money";
 import { PageHeader, SectionHeader } from "@/components/shared/page-header";
+import { requirePageUser } from "@/server/auth/guard";
 import { db } from "@/server/db";
 import { listAccounts } from "@/server/services/accounts";
 import { listGoals } from "@/server/services/goals";
@@ -13,7 +14,8 @@ import { listGoals } from "@/server/services/goals";
 export const metadata: Metadata = { title: "Metas" };
 
 export default async function GoalsPage() {
-  const [goals, accounts] = await Promise.all([listGoals(db, { includeArchived: true }), listAccounts(db)]);
+  const user = await requirePageUser();
+  const [goals, accounts] = await Promise.all([listGoals(db, user.id, { includeArchived: true }), listAccounts(db, user.id)]);
   const accountOptions = accounts.map((a) => ({ id: a.id, name: a.name }));
   const active = goals.filter((g) => g.status === "ACTIVE");
   const completed = goals.filter((g) => g.status === "COMPLETED");

@@ -8,8 +8,9 @@ import { searchTransactions } from "../services/transactions";
 
 describe("configuración inicial", () => {
   let db: Db;
+  let uid: string;
   let cleanup: () => Promise<void>;
-  beforeEach(async () => ({ db, cleanup } = await createTestDb()));
+  beforeEach(async () => ({ db, cleanup, userId: uid } = await createTestDb()));
   afterEach(() => cleanup());
 
   const base = {
@@ -27,33 +28,33 @@ describe("configuración inicial", () => {
   };
 
   it("crea cuenta, categorías y meta en una sola operación", async () => {
-    expect(await isOnboardingCompleted(db)).toBe(false);
-    const { accountId } = await completeOnboarding(db, {
+    expect(await isOnboardingCompleted(db, uid)).toBe(false);
+    const { accountId } = await completeOnboarding(db, uid, {
       ...base,
       goal: { name: "PC nueva", targetAmount: 2_000_000n, targetDate: new Date("2027-12-31T17:00:00Z"), initialSaved: 350_000n },
     });
-    expect(await isOnboardingCompleted(db)).toBe(true);
-    expect(await computeBalance(db, accountId)).toBe(250_000n);
+    expect(await isOnboardingCompleted(db, uid)).toBe(true);
+    expect(await computeBalance(db, uid, accountId)).toBe(250_000n);
     expect((await db.category.findMany()).map((c) => c.name).sort()).toEqual(["Comida", "Mascotas", "Trabajo"]);
     const goal = await db.savingsGoal.findFirstOrThrow({ include: { contributions: true } });
     expect(goal.contributions[0].amount).toBe(350_000n);
     // El saldo inicial no es un ingreso.
-    expect((await searchTransactions(db, { type: "INCOME" })).total).toBe(0);
+    expect((await searchTransactions(db, uid, { type: "INCOME" })).total).toBe(0);
   });
 
   it("no deja datos a medias si algo falla", async () => {
     await expect(
-      completeOnboarding(db, { ...base, account: { ...base.account, name: "   " } }),
+      completeOnboarding(db, uid, { ...base, account: { ...base.account, name: "   " } }),
     ).rejects.toThrow(/nombre/);
     expect(await db.category.count()).toBe(0);
-    expect(await isOnboardingCompleted(db)).toBe(false);
+    expect(await isOnboardingCompleted(db, uid)).toBe(false);
   });
 
   it("exige categorías de ingreso y gasto, y no se repite", async () => {
     await expect(
-      completeOnboarding(db, { ...base, defaultCategories: [], customCategories: [] }),
+      completeOnboarding(db, uid, { ...base, defaultCategories: [], customCategories: [] }),
     ).rejects.toThrow(/categoría de gasto/);
-    await completeOnboarding(db, base);
-    await expect(completeOnboarding(db, base)).rejects.toThrow(/ya se completó/);
+    await completeOnboarding(db, uid, base);
+    await expect(completeOnboarding(db, uid, base)).rejects.toThrow(/ya se completó/);
   });
 });

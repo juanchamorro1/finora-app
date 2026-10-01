@@ -10,6 +10,7 @@ import { PageHeader, SectionHeader } from "@/components/shared/page-header";
 import { addDays, formatDate, formatMonthKeyShort, formatRelativeDay, toDateKey } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { resolvePeriod } from "@/lib/periods";
+import { requirePageUser } from "@/server/auth/guard";
 import { db } from "@/server/db";
 import { parsePeriodParams } from "@/server/period-params";
 import { loadFlows } from "@/server/services/analytics";
@@ -19,12 +20,13 @@ import { getAntThreshold } from "@/server/services/settings";
 export const metadata: Metadata = { title: "Gastos hormiga" };
 
 export default async function AntExpensesPage({ searchParams }: PageProps<"/gastos-hormiga">) {
+  const user = await requirePageUser();
   const period = parsePeriodParams(await searchParams);
   const evolutionRange = resolvePeriod("last-6-months");
   const [threshold, periodFlows, evolutionFlows] = await Promise.all([
-    getAntThreshold(db),
-    loadFlows(db, period),
-    loadFlows(db, evolutionRange),
+    getAntThreshold(db, user.id),
+    loadFlows(db, user.id, period),
+    loadFlows(db, user.id, evolutionRange),
   ]);
   const a = analyzeAntExpenses(periodFlows.flows, threshold, period);
   const evolution = analyzeAntExpenses(evolutionFlows.flows, threshold, evolutionRange).byMonth;
