@@ -1,4 +1,4 @@
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import type { SqlDriverAdapterFactory } from "@prisma/driver-adapter-utils";
 import { PrismaClient } from "@/generated/prisma/client";
 
 export type Db = PrismaClient;
@@ -7,12 +7,27 @@ export type Db = PrismaClient;
 export type DbTx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends">;
 
 /**
- * Crea un cliente. Funciona con un archivo local (`file:./data/finora.db`) o con
- * una base Turso en la nube (`libsql://…` + token). Ambos son SQLite.
+ * Elige el cliente libSQL según la URL, cargándolo solo cuando se conecta:
+ * - `file:…`   → cliente nativo (base local en el PC).
+ * - `libsql://` → cliente web (HTTP, sin binarios nativos). Es el que usa Vercel,
+ *   donde el binario nativo de libSQL no se incluye en el despliegue.
  */
+function libsqlAdapter(url: string, authToken?: string): SqlDriverAdapterFactory {
+  const config = { url, authToken: authToken || undefined };
+  const load = async () =>
+    url.startsWith("file:")
+      ? new (await import("@prisma/adapter-libsql")).PrismaLibSql(config)
+      : new (await import("@prisma/adapter-libsql/web")).PrismaLibSql(config);
+  return {
+    provider: "sqlite",
+    adapterName: "@prisma/adapter-libsql",
+    connect: async () => (await load()).connect(),
+  };
+}
+
+/** Crea un cliente: archivo local (`file:./data/finora.db`) o Turso (`libsql://…` + token). */
 export function createDb(url: string, authToken?: string): PrismaClient {
-  const adapter = new PrismaLibSql({ url, authToken: authToken || undefined });
-  return new PrismaClient({ adapter });
+  return new PrismaClient({ adapter: libsqlAdapter(url, authToken) });
 }
 
 /**
