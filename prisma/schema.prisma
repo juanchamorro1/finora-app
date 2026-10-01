@@ -1,0 +1,165 @@
+// Finora — esquema de base de datos.
+//
+// Reglas clave (ver también las CHECK constraints añadidas a mano en la migración inicial):
+// - Todos los montos son BigInt en unidades mínimas de la moneda (COP = pesos enteros, USD = centavos).
+// - El saldo de una cuenta NO se almacena: se deriva de sus movimientos (libro contable).
+// - INCOME / EXPENSE / TRANSFER siempre tienen amount > 0; el signo lo da el tipo.
+// - OPENING_BALANCE / ADJUSTMENT llevan signo (≠ 0) y no cuentan como ingreso ni gasto.
+// - Los movimientos se eliminan de forma suave (deletedAt) y se pueden restaurar.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum AccountType {
+  BANK
+  DIGITAL_WALLET
+  CASH
+  CRYPTO
+  OTHER
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+  OPENING_BALANCE
+  ADJUSTMENT
+}
+
+enum CategoryKind {
+  INCOME
+  EXPENSE
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model Account {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  type      AccountType
+  /// Código ISO-4217 o de activo (COP, USD, USDT...).
+  currency  String      @default("COP")
+  isActive  Boolean     @default(true)
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  transactions      Transaction[]  @relation("TransactionAccount")
+  incomingTransfers Transaction[]  @relation("TransferDestination")
+  goals             SavingsGoal[]
+}
+
+model Category {
+  id         String       @id @default(cuid())
+  name       String
+  kind       CategoryKind
+  /// Nombre de icono (lucide) usado por la UI.
+  icon       String       @default("circle")
+  color      String       @default("#64748b")
+  isDefault  Boolean      @default(false)
+  isArchived Boolean      @default(false)
+  sortOrder  Int          @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  transactions Transaction[]
+  budget       Budget?
+
+  @@unique([name, kind])
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  type        TransactionType
+  /// Unidades mínimas de la moneda de `account`.
+  amount      BigInt
+  accountId   String
+  account     Account         @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: Restrict)
+  /// Solo para TRANSFER: cuenta destino.
+  toAccountId String?
+  toAccount   Account?        @relation("TransferDestination", fields: [toAccountId], references: [id], onDelete: Restrict)
+  /// Solo para TRANSFER: monto recibido en la moneda de la cuenta destino.
+  toAmount    BigInt?
+  /// Obligatoria para INCOME / EXPENSE; nula para el resto.
+  categoryId  String?
+  category    Category?       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  /// Momento del movimiento (UTC). Los rangos de fechas se calculan en America/Bogota.
+  date        DateTime
+  description String
+  note        String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+
+  @@index([date])
+  @@index([accountId])
+  @@index([toAccountId])
+  @@index([categoryId])
+  @@index([type, date])
+  @@index([deletedAt])
+}
+
+model Budget {
+  id         String   @id @default(cuid())
+  categoryId String   @unique
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  /// Límite mensual en COP (se aplica cada mes).
+  amount     BigInt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model SavingsGoal {
+  id           String     @id @default(cuid())
+  name         String
+  /// Objetivo en COP.
+  targetAmount BigInt
+  targetDate   DateTime?
+  /// Cuenta donde se guarda el dinero (informativo; los aportes no mueven saldos).
+  accountId    String?
+  account      Account?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  status       GoalStatus @default(ACTIVE)
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  contributions GoalContribution[]
+}
+
+model GoalContribution {
+  id        String      @id @default(cuid())
+  goalId    String
+  goal      SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  /// COP. Positivo = aporte, negativo = retiro de la meta.
+  amount    BigInt
+  date      DateTime
+  note      String?
+  createdAt DateTime    @default(now())
+
+  @@index([goalId])
+}
+
+/// Tasa manual para convertir otras monedas a COP.
+model ExchangeRate {
+  currency   String   @id
+  /// COP por 1 unidad mayor de `currency`, escalado ×1.000.000.
+  rateMicros BigInt
+  updatedAt  DateTime @updatedAt
+}
+
+/// Preferencias clave/valor (onboarding, umbral de gastos hormiga, etc.).
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
