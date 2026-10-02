@@ -21,5 +21,5 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Todo excepto /login y archivos públicos (estáticos, iconos, manifiesto de la PWA).
-  matcher: ["/((?!login|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sw.js).*)"],
+  matcher: ["/((?!login|api/diagnostico|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sw.js).*)"],
 };
