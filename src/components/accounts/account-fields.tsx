@@ -24,6 +24,8 @@ export function AccountFields({
   onChange,
   errors = {},
   showOpeningBalance = true,
+  openingBalanceLabel = "Saldo actual",
+  openingBalanceHint = "Se registra como saldo inicial: no cuenta como ingreso del mes.",
   currencyLocked = false,
   errorPrefix = "",
 }: {
@@ -31,6 +33,8 @@ export function AccountFields({
   onChange: (values: AccountFieldValues) => void;
   errors?: FieldErrors;
   showOpeningBalance?: boolean;
+  openingBalanceLabel?: string;
+  openingBalanceHint?: string;
   currencyLocked?: boolean;
   errorPrefix?: string;
 }) {
@@ -91,7 +95,7 @@ export function AccountFields({
       </div>
       {showOpeningBalance && (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="account-opening">Saldo actual</Label>
+          <Label htmlFor="account-opening">{openingBalanceLabel}</Label>
           <AmountInput
             id="account-opening"
             currency={values.currency}
@@ -102,9 +106,7 @@ export function AccountFields({
           {err("openingBalance") ? (
             <p className="text-sm text-destructive">{err("openingBalance")}</p>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              Se registra como saldo inicial: no cuenta como ingreso del mes.
-            </p>
+            <p className="text-xs text-muted-foreground">{openingBalanceHint}</p>
           )}
         </div>
       )}

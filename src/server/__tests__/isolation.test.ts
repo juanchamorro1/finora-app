@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "../db-client";
 import { createTestDb, createTestUser } from "./test-db";
-import { createAccount, deleteAccount, getNetWorth, listAccounts, reconcileBalance, updateAccount } from "../services/accounts";
+import { createAccount, deleteAccount, getNetWorth, listAccounts, reconcileBalance, setOpeningBalance, updateAccount } from "../services/accounts";
 import { createCategory, ensureDefaultCategories, listCategories, updateCategory } from "../services/categories";
 import { createTransaction, searchTransactions, trashTransaction, updateTransaction } from "../services/transactions";
 import { setBudget, listBudgets, deleteBudget } from "../services/budgets";
@@ -79,6 +79,7 @@ describe("aislamiento entre usuarios", () => {
     await expect(trashTransaction(db, mama, juanTx)).rejects.toThrow(/no existe/);
     await expect(updateAccount(db, mama, juanAccount, { name: "Robada", type: "CASH", currency: "COP" })).rejects.toThrow(/no existe/);
     await expect(reconcileBalance(db, mama, juanAccount, 0n)).rejects.toThrow(/no existe/);
+    await expect(setOpeningBalance(db, mama, juanAccount, 1n)).rejects.toThrow(/no existe/);
     await expect(deleteAccount(db, mama, juanAccount)).rejects.toThrow(/no existe/);
     await expect(updateCategory(db, mama, juanCategory, { name: "X" })).rejects.toThrow(/no existe/);
     await expect(setBudget(db, mama, juanCategory, 1n)).rejects.toThrow(/no existe/);

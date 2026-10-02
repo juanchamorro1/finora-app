@@ -8,6 +8,8 @@ import {
   listAccounts,
   reconcileBalance,
   setAccountActive,
+  setOpeningBalance,
+  updateAccount,
   deleteAccount,
 } from "../services/accounts";
 import { computeBalance } from "../services/ledger";
@@ -139,6 +141,29 @@ describe("libro contable", () => {
     expect(await computeBalance(db, uid, bancolombia)).toBe(480_000n);
     expect((await searchTransactions(db, uid, { type: "EXPENSE" })).total).toBe(0);
     expect(await reconcileBalance(db, uid, bancolombia, 480_000n, today)).toBeNull();
+  });
+
+  it("el saldo inicial se puede modificar y el saldo actual se recalcula", async () => {
+    await createTransaction(db, uid, { type: "EXPENSE", amount: 8_000n, accountId: bancolombia, categoryId: comida, date: today });
+    await updateAccount(db, uid, bancolombia, { name: "Bancolombia", type: "BANK", currency: "COP", openingBalance: 700_000n });
+    expect(await computeBalance(db, uid, bancolombia)).toBe(692_000n);
+    expect((await searchTransactions(db, uid, { type: "OPENING_BALANCE" })).total).toBe(1);
+    expect((await listAccounts(db, uid)).find((a) => a.id === bancolombia)?.openingBalance).toBe(700_000n);
+    // Sin openingBalance no se toca.
+    await updateAccount(db, uid, bancolombia, { name: "Banco", type: "BANK", currency: "COP" });
+    expect(await computeBalance(db, uid, bancolombia)).toBe(692_000n);
+    // En 0 se elimina el movimiento.
+    await setOpeningBalance(db, uid, bancolombia, 0n);
+    expect(await computeBalance(db, uid, bancolombia)).toBe(-8_000n);
+    expect((await searchTransactions(db, uid, { type: "OPENING_BALANCE" })).total).toBe(0);
+  });
+
+  it("crea el saldo inicial en una cuenta que no tenía, con la fecha de su primer movimiento", async () => {
+    await createTransaction(db, uid, { type: "TRANSFER", amount: 50_000n, accountId: bancolombia, toAccountId: nequi, date: today });
+    const opening = await setOpeningBalance(db, uid, nequi, 20_000n);
+    expect(opening?.date).toEqual(today);
+    expect(await computeBalance(db, uid, nequi)).toBe(70_000n);
+    expect((await searchTransactions(db, uid, { type: "INCOME" })).total).toBe(0);
   });
 
   it("no permite nombres de cuenta duplicados aunque cambien mayúsculas o espacios", async () => {
