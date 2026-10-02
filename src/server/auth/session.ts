@@ -9,13 +9,15 @@
  * En producción el secreto es obligatorio: sin él la app se niega a abrir.
  */
 
+import { readEnv } from "../env";
+
 export const SESSION_COOKIE = "finora_session";
 export const SESSION_DAYS = 30;
 
 export type AuthMode = "disabled" | "enabled" | "misconfigured";
 
 export function authMode(): AuthMode {
-  const secret = process.env.FINORA_SESSION_SECRET;
+  const secret = readEnv("FINORA_SESSION_SECRET");
   if (!secret) return process.env.NODE_ENV === "production" ? "misconfigured" : "disabled";
   return secret.length >= 32 ? "enabled" : "misconfigured";
 }
@@ -25,7 +27,7 @@ const encoder = new TextEncoder();
 async function hmac(value: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(process.env.FINORA_SESSION_SECRET ?? ""),
+    encoder.encode(readEnv("FINORA_SESSION_SECRET") ?? ""),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
