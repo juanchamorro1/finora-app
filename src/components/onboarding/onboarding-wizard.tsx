@@ -12,6 +12,7 @@ import { AmountInput } from "@/components/shared/amount-input";
 import { CategoryIcon } from "@/components/shared/category-icon";
 import type { FieldErrors } from "@/lib/action-result";
 import { cn } from "@/lib/utils";
+import { logoutAction } from "@/server/actions/auth";
 import { completeOnboardingAction } from "@/server/actions/onboarding";
 import type { DefaultCategory } from "@/server/services/defaults";
 import type { AccountType } from "@/generated/prisma/enums";
@@ -30,7 +31,10 @@ const STEPS = ["Cuenta", "Categorías", "Meta"] as const;
 export function OnboardingWizard({
   expenseDefaults,
   incomeDefaults,
+  canLogout,
 }: {
+  /** En el primer paso, "Atrás" cierra la sesión y vuelve al inicio de sesión. */
+  canLogout: boolean;
   expenseDefaults: DefaultCategory[];
   incomeDefaults: DefaultCategory[];
 }) {
@@ -283,6 +287,12 @@ export function OnboardingWizard({
           <Button variant="ghost" onClick={() => setStep((s) => s - 1)} disabled={pending}>
             <ArrowLeft /> Atrás
           </Button>
+        ) : canLogout ? (
+          <form action={logoutAction}>
+            <Button type="submit" variant="ghost">
+              <ArrowLeft /> Atrás
+            </Button>
+          </form>
         ) : (
           <span />
         )}

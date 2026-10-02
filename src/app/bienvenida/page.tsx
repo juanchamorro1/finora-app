@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 import { requirePageUser } from "@/server/auth/guard";
+import { authMode } from "@/server/auth/session";
 import { db } from "@/server/db";
 import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from "@/server/services/defaults";
 import { isOnboardingCompleted } from "@/server/services/settings";
@@ -14,7 +15,11 @@ export default async function WelcomePage() {
   if (await isOnboardingCompleted(db, user.id)) redirect("/");
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col px-4 py-10 sm:py-16">
-      <OnboardingWizard expenseDefaults={DEFAULT_EXPENSE_CATEGORIES} incomeDefaults={DEFAULT_INCOME_CATEGORIES} />
+      <OnboardingWizard
+        expenseDefaults={DEFAULT_EXPENSE_CATEGORIES}
+        incomeDefaults={DEFAULT_INCOME_CATEGORIES}
+        canLogout={authMode() === "enabled"}
+      />
     </main>
   );
 }
