@@ -78,7 +78,7 @@ export default async function SettingsPage() {
         </Section>
 
         {authMode() === "enabled" && (
-          <Section title="Sesión" description="Tu sesión dura 30 días en cada dispositivo.">
+          <Section title="Sesión" description="Tu sesión se mantiene abierta en cada dispositivo mientras uses la app.">
             <form action={logoutAction}>
               <Button type="submit" variant="outline">
                 <LogOut /> Cerrar sesión

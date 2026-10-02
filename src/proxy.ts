@@ -1,15 +1,32 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, authMode, verifySessionToken } from "@/server/auth/session";
+import {
+  SESSION_COOKIE,
+  SESSION_COOKIE_OPTIONS,
+  authMode,
+  createSessionToken,
+  shouldRenewSession,
+  verifySessionToken,
+} from "@/server/auth/session";
 
 /**
- * Filtro rápido: sin sesión válida, todo se redirige a /login.
- * La verificación definitiva también ocurre en el layout y en cada Server Action.
+ * Filtro rápido: sin sesión válida, todo se redirige a /login. Con sesión
+ * válida, renueva la cookie (máximo una vez al día) para que nunca expire
+ * mientras se use la app. La verificación definitiva también ocurre en las
+ * páginas y en cada Server Action.
  */
 export async function proxy(request: NextRequest) {
   const mode = authMode();
   if (mode === "disabled") return NextResponse.next();
-  const valid = mode === "enabled" && (await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value));
-  if (valid) return NextResponse.next();
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const userId = mode === "enabled" ? await verifySessionToken(token) : null;
+  if (userId && token) {
+    const response = NextResponse.next();
+    if (shouldRenewSession(token)) {
+      const { value, expires } = await createSessionToken(userId);
+      response.cookies.set(SESSION_COOKIE, value, { ...SESSION_COOKIE_OPTIONS, expires });
+    }
+    return response;
+  }
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new NextResponse("No autorizado", { status: 401 });
   }
@@ -21,5 +38,5 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Todo excepto /login y archivos públicos (estáticos, iconos, manifiesto de la PWA).
-  matcher: ["/((?!login|api/diagnostico|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sw.js).*)"],
+  matcher: ["/((?!login|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sw.js).*)"],
 };

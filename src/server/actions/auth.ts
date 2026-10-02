@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyPassword } from "../auth/password";
-import { SESSION_COOKIE, authMode, createSessionToken } from "../auth/session";
+import { SESSION_COOKIE, SESSION_COOKIE_OPTIONS, authMode, createSessionToken } from "../auth/session";
 import { db } from "../db";
 
 // Freno simple contra intentos repetidos, por usuario (por instancia del servidor).
@@ -46,13 +46,7 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
 
   attempts.delete(username);
   const { value, expires } = await createSessionToken(user.id);
-  (await cookies()).set(SESSION_COOKIE, value, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    expires,
-  });
+  (await cookies()).set(SESSION_COOKIE, value, { ...SESSION_COOKIE_OPTIONS, expires });
   redirect("/");
 }
 

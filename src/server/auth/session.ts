@@ -12,7 +12,10 @@
 import { readEnv } from "../env";
 
 export const SESSION_COOKIE = "finora_session";
-export const SESSION_DAYS = 30;
+/** La sesión dura 6 meses y se renueva sola mientras se use la app. */
+export const SESSION_DAYS = 180;
+/** Se renueva la cookie como máximo una vez al día. */
+const RENEW_AFTER_MS = 86_400_000;
 
 export type AuthMode = "disabled" | "enabled" | "misconfigured";
 
@@ -63,3 +66,16 @@ export async function verifySessionToken(token: string | undefined, now: number 
   if (!/^\d+$/.test(expires) || Number(expires) < now) return null;
   return safeEqual(signature, await hmac(`${userId}:${expires}`)) ? userId : null;
 }
+
+/** ¿Conviene renovar esta cookie válida? (si se emitió hace más de un día). */
+export function shouldRenewSession(token: string, now: number = Date.now()): boolean {
+  const expires = Number(token.split(".")[1]);
+  return Number.isFinite(expires) && expires - now < SESSION_DAYS * 86_400_000 - RENEW_AFTER_MS;
+}
+
+export const SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  path: "/",
+};

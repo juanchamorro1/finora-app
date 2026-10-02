@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hashPassword, verifyPassword } from "../auth/password";
-import { authMode, createSessionToken, verifySessionToken } from "../auth/session";
+import { authMode, createSessionToken, shouldRenewSession, verifySessionToken } from "../auth/session";
 
 describe("autenticación", () => {
   beforeEach(() => {
@@ -25,12 +25,22 @@ describe("autenticación", () => {
     // Cambiar el usuario invalida la firma: nadie puede hacerse pasar por otro.
     expect(await verifySessionToken(`usuario-b.${exp}.${sig}`, now)).toBeNull();
     expect(await verifySessionToken(`usuario-a.${Number(exp) + 999999}.${sig}`, now)).toBeNull();
-    expect(await verifySessionToken(`usuario-a.${exp}.${sig.slice(0, -1)}A`, now)).toBeNull();
+    const tampered = sig.slice(0, -1) + (sig.endsWith("A") ? "B" : "A");
+    expect(await verifySessionToken(`usuario-a.${exp}.${tampered}`, now)).toBeNull();
     expect(await verifySessionToken(`${value}.extra`, now)).toBeNull();
     expect(await verifySessionToken(value, Number(exp) + 1)).toBeNull();
     expect(await verifySessionToken(undefined, now)).toBeNull();
     vi.stubEnv("FINORA_SESSION_SECRET", "y".repeat(40));
     expect(await verifySessionToken(value, now)).toBeNull();
+  });
+
+  it("la sesión dura 6 meses y se renueva como máximo una vez al día", async () => {
+    const now = Date.now();
+    const { value, expires } = await createSessionToken("usuario-a", now);
+    expect(Math.round((expires.getTime() - now) / 86_400_000)).toBe(180);
+    expect(shouldRenewSession(value, now)).toBe(false);
+    expect(shouldRenewSession(value, now + 3_600_000)).toBe(false);
+    expect(shouldRenewSession(value, now + 2 * 86_400_000)).toBe(true);
   });
 
   it("en producción exige el secreto de sesión", () => {
