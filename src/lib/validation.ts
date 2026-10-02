@@ -52,6 +52,11 @@ export const createAccountSchema = accountFormSchema.extend({
   openingBalance: z.string().trim().max(30).optional().default(""),
 });
 
+export const updateAccountSchema = accountFormSchema.extend({
+  /** Saldo inicial nuevo; ausente = no se modifica. */
+  openingBalance: z.string().trim().max(30).optional(),
+});
+
 export const categoryFormSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio").max(30, "Máximo 30 caracteres"),
   kind: z.enum(["INCOME", "EXPENSE"]),

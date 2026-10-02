@@ -17,6 +17,8 @@ export interface AccountWithBalance {
   balance: bigint;
   /** Saldo convertido a COP (null si falta la tasa). */
   balanceBase: bigint | null;
+  /** Saldo inicial registrado (0 si no tiene). */
+  openingBalance: bigint;
   transactionCount: number;
 }
 
@@ -32,7 +34,7 @@ export async function listAccounts(
   userId: string,
   opts: { includeInactive?: boolean } = {},
 ): Promise<AccountWithBalance[]> {
-  const [accounts, balances, rates] = await Promise.all([
+  const [accounts, balances, rates, openingRows] = await Promise.all([
     db.account.findMany({
       where: { userId, ...(opts.includeInactive ? {} : { isActive: true }) },
       orderBy: [{ isActive: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
@@ -47,7 +49,13 @@ export async function listAccounts(
     }),
     computeBalances(db, userId),
     getRateTable(db, userId),
+    db.transaction.findMany({
+      where: { userId, type: "OPENING_BALANCE", deletedAt: null },
+      select: { accountId: true, amount: true },
+    }),
   ]);
+  const openings = new Map<string, bigint>();
+  for (const t of openingRows) openings.set(t.accountId, (openings.get(t.accountId) ?? 0n) + t.amount);
   return accounts.map((a) => {
     const balance = balances.get(a.id) ?? 0n;
     return {
@@ -59,6 +67,7 @@ export async function listAccounts(
       sortOrder: a.sortOrder,
       balance,
       balanceBase: toBase(balance, a.currency, rates),
+      openingBalance: openings.get(a.id) ?? 0n,
       transactionCount: a._count.transactions + a._count.incomingTransfers,
     };
   });
@@ -133,12 +142,15 @@ export async function createAccount(db: Db | DbTx, userId: string, input: Create
   });
 }
 
-/** La moneda no se puede cambiar si la cuenta ya tiene movimientos. */
+/**
+ * La moneda no se puede cambiar si la cuenta ya tiene movimientos.
+ * Si se envía `openingBalance`, reemplaza el saldo inicial (ver `setOpeningBalance`).
+ */
 export async function updateAccount(
   db: Db,
   userId: string,
   id: string,
-  input: { name: string; type: AccountType; currency: string },
+  input: { name: string; type: AccountType; currency: string; openingBalance?: bigint },
 ) {
   const account = await getOwnAccount(db, userId, id);
   const name = input.name.trim();
@@ -151,7 +163,55 @@ export async function updateAccount(
     });
     assertDomain(count === 0, "No puedes cambiar la moneda de una cuenta con movimientos", "currency");
   }
-  return db.account.update({ where: { id }, data: { name, type: input.type, currency: input.currency } });
+  return withTx(db, async (tx) => {
+    const updated = await tx.account.update({ where: { id }, data: { name, type: input.type, currency: input.currency } });
+    if (input.openingBalance !== undefined) await setOpeningBalance(tx, userId, id, input.openingBalance);
+    return updated;
+  });
+}
+
+/**
+ * Cambia el saldo inicial de la cuenta. El saldo actual se recalcula solo (se deriva del libro).
+ * Edita el movimiento OPENING_BALANCE existente; si no hay, lo crea con la fecha del primer
+ * movimiento de la cuenta; con 0 lo elimina.
+ */
+export async function setOpeningBalance(db: Db | DbTx, userId: string, id: string, amount: bigint) {
+  await getOwnAccount(db, userId, id, "openingBalance");
+  return withTx(db, async (tx) => {
+    const openings = await tx.transaction.findMany({
+      where: { userId, accountId: id, type: "OPENING_BALANCE", deletedAt: null },
+      orderBy: { date: "asc" },
+    });
+    const [current, ...extra] = openings;
+    // Solo debe haber uno; si hubiera más, se dejan en la papelera para no sumarlos dos veces.
+    if (extra.length > 0) {
+      await tx.transaction.updateMany({ where: { id: { in: extra.map((t) => t.id) } }, data: { deletedAt: new Date() } });
+    }
+    if (amount === 0n) {
+      if (current) await tx.transaction.delete({ where: { id: current.id } });
+      return null;
+    }
+    if (current) {
+      return current.amount === amount
+        ? current
+        : tx.transaction.update({ where: { id: current.id }, data: { amount } });
+    }
+    const first = await tx.transaction.findFirst({
+      where: { userId, deletedAt: null, OR: [{ accountId: id }, { toAccountId: id }] },
+      orderBy: { date: "asc" },
+      select: { date: true },
+    });
+    return tx.transaction.create({
+      data: {
+        userId,
+        type: "OPENING_BALANCE",
+        amount,
+        accountId: id,
+        date: first?.date ?? new Date(),
+        description: "Saldo inicial",
+      },
+    });
+  });
 }
 
 export async function setAccountActive(db: Db, userId: string, id: string, isActive: boolean) {

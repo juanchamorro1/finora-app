@@ -32,9 +32,12 @@ export function AccountRow({
   account,
   transactionCount,
   balanceBase,
+  openingBalance,
 }: {
   account: AccountOption;
   transactionCount: number;
+  /** Saldo inicial registrado (0 si no tiene). */
+  openingBalance: bigint;
   /** Equivalente en COP para cuentas en otra moneda (null si falta tasa). */
   balanceBase: bigint | null;
 }) {
@@ -105,7 +108,7 @@ export function AccountRow({
       </DropdownMenu>
 
       {dialog === "edit" && (
-        <EditAccountDialog account={account} hasTransactions={transactionCount > 0} open onOpenChange={(o) => !o && setDialog(null)} />
+        <EditAccountDialog account={account} openingBalance={openingBalance} hasTransactions={transactionCount > 0} open onOpenChange={(o) => !o && setDialog(null)} />
       )}
       {dialog === "reconcile" && (
         <ReconcileDialog account={account} open onOpenChange={(o) => !o && setDialog(null)} />

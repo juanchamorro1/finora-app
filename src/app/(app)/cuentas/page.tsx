@@ -41,7 +41,7 @@ export default async function AccountsPage() {
         {active.length > 0 ? (
           <ul className="divide-y divide-border/60">
             {active.map((a) => (
-              <AccountRow key={a.id} account={toAccountOption(a)} transactionCount={a.transactionCount} balanceBase={a.balanceBase} />
+              <AccountRow key={a.id} account={toAccountOption(a)} transactionCount={a.transactionCount} balanceBase={a.balanceBase} openingBalance={a.openingBalance} />
             ))}
           </ul>
         ) : (
@@ -54,7 +54,7 @@ export default async function AccountsPage() {
           <SectionHeader title="Inactivas" />
           <ul className="divide-y divide-border/60">
             {inactive.map((a) => (
-              <AccountRow key={a.id} account={toAccountOption(a)} transactionCount={a.transactionCount} balanceBase={a.balanceBase} />
+              <AccountRow key={a.id} account={toAccountOption(a)} transactionCount={a.transactionCount} balanceBase={a.balanceBase} openingBalance={a.openingBalance} />
             ))}
           </ul>
         </section>

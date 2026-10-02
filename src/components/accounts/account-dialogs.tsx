@@ -69,27 +69,38 @@ export function CreateAccountDialog({ trigger }: { trigger: ReactElement }) {
 
 export function EditAccountDialog({
   account,
+  openingBalance,
   hasTransactions,
   open,
   onOpenChange,
 }: {
   account: AccountOption;
+  /** Saldo inicial actual de la cuenta. */
+  openingBalance: bigint;
   hasTransactions: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const initialOpening = openingBalance === 0n ? "" : formatAmountInput(openingBalance, account.currency);
+  // El campo solo admite montos positivos: un saldo inicial negativo (deuda) conserva su signo.
+  const negativeOpening = openingBalance < 0n;
   const [values, setValues] = useState<AccountFieldValues>({
     name: account.name,
     type: account.type,
     currency: account.currency,
-    openingBalance: "",
+    openingBalance: initialOpening,
   });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [pending, startTransition] = useTransition();
 
   function submit() {
     startTransition(async () => {
-      const result = await updateAccountAction(account.id, values);
+      const opening = values.openingBalance && negativeOpening ? `-${values.openingBalance}` : values.openingBalance;
+      const result = await updateAccountAction(account.id, {
+        ...values,
+        // Si no cambió, no se envía: así no se reescribe el saldo inicial.
+        openingBalance: values.openingBalance === initialOpening && values.currency === account.currency ? undefined : opening,
+      });
       if (!result.ok) {
         setErrors(result.fieldErrors ?? {});
         if (!result.fieldErrors) toast.error(result.error);
@@ -105,7 +116,7 @@ export function EditAccountDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Editar cuenta</DialogTitle>
-          <DialogDescription className="sr-only">Cambia el nombre, tipo o moneda.</DialogDescription>
+          <DialogDescription className="sr-only">Cambia el nombre, tipo, moneda o saldo inicial.</DialogDescription>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -118,7 +129,8 @@ export function EditAccountDialog({
             values={values}
             onChange={setValues}
             errors={errors}
-            showOpeningBalance={false}
+            openingBalanceLabel={negativeOpening ? "Saldo inicial (negativo)" : "Saldo inicial"}
+            openingBalanceHint="El saldo actual se recalcula con todos los movimientos. Para cuadrar con el banco usa Ajustar saldo."
             currencyLocked={hasTransactions}
           />
           <DialogFooter>
