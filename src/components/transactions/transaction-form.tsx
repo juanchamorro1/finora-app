@@ -84,7 +84,7 @@ export function TransactionForm({
   const kindCategories = useMemo(
     () =>
       categories.filter(
-        (c) => c.kind === values.type && (!c.isArchived || c.id === initial.categoryId),
+        (c) => c.kind === values.type && ((!c.isArchived && !c.isSystem) || c.id === initial.categoryId),
       ),
     [categories, values.type, initial.categoryId],
   );

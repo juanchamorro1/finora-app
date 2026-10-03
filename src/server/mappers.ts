@@ -33,6 +33,7 @@ export function toCategoryOption(c: {
   icon: string;
   color: string;
   isArchived: boolean;
+  systemKey?: string | null;
 }): CategoryOption {
-  return { id: c.id, name: c.name, kind: c.kind, icon: c.icon, color: c.color, isArchived: c.isArchived };
+  return { id: c.id, name: c.name, kind: c.kind, icon: c.icon, color: c.color, isArchived: c.isArchived, isSystem: Boolean(c.systemKey) };
 }

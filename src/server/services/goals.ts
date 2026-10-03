@@ -1,7 +1,10 @@
 import { localParts, startOfDay } from "@/lib/dates";
-import { divRound, percentOf } from "@/lib/money";
+import { BASE_CURRENCY } from "@/lib/currency";
+import { divRound, formatMoney, percentOf } from "@/lib/money";
 import { withTx, type Db, type DbTx } from "../db-client";
 import { assertDomain } from "../errors";
+import { ensureSystemCategory } from "./categories";
+import { computeBalance } from "./ledger";
 
 export interface GoalInput {
   name: string;
@@ -95,15 +98,18 @@ async function savedAmount(db: Db | DbTx, goalId: string): Promise<bigint> {
 }
 
 /**
- * Aporta (monto > 0) o retira (monto < 0) dinero apartado para la meta.
- * No mueve saldos de cuentas: es dinero reservado. No se puede retirar más de lo ahorrado.
+ * Aporta (monto > 0) o retira (monto < 0) dinero de la meta. No se puede retirar más de lo ahorrado.
+ *
+ * Con `accountId`, el dinero sale de esa cuenta (un gasto en "Ahorro para metas": el saldo de
+ * la cuenta baja) o vuelve a ella (un ingreso en "Retiro de metas"). Sin cuenta, es dinero
+ * que ya estaba aparte y no mueve ningún saldo.
  */
 export async function addContribution(
   db: Db | DbTx,
   userId: string,
   goalId: string,
   amount: bigint,
-  opts: { date?: Date; note?: string | null } = {},
+  opts: { date?: Date; note?: string | null; accountId?: string | null } = {},
 ) {
   assertDomain(amount !== 0n, "El monto no puede ser 0", "amount");
   const note = opts.note?.trim() || null;
@@ -114,7 +120,39 @@ export async function addContribution(
     const saved = await savedAmount(tx, goalId);
     assertDomain(saved + amount >= 0n, "No puedes retirar más de lo ahorrado en la meta", "amount");
     const now = opts.date ?? new Date();
-    const contribution = await tx.goalContribution.create({ data: { goalId, amount, date: now, note } });
+
+    let transactionId: string | null = null;
+    if (opts.accountId) {
+      const account = await tx.account.findFirst({ where: { id: opts.accountId, userId } });
+      assertDomain(account, "La cuenta no existe", "accountId");
+      assertDomain(account.isActive, `${account.name} está desactivada`, "accountId");
+      // Las metas son en pesos: solo se mueve dinero de cuentas en la misma moneda.
+      assertDomain(account.currency === BASE_CURRENCY, "Elige una cuenta en pesos (COP)", "accountId");
+      if (amount > 0n) {
+        const balance = await computeBalance(tx, userId, account.id);
+        assertDomain(
+          balance >= amount,
+          `No tienes suficiente en ${account.name} (saldo ${formatMoney(balance)})`,
+          "amount",
+        );
+      }
+      const category = await ensureSystemCategory(tx, userId, amount > 0n ? "goal-saving" : "goal-withdrawal");
+      const movement = await tx.transaction.create({
+        data: {
+          userId,
+          type: amount > 0n ? "EXPENSE" : "INCOME",
+          amount: amount > 0n ? amount : -amount,
+          accountId: account.id,
+          categoryId: category.id,
+          date: now,
+          description: amount > 0n ? `Aporte a ${goal.name}` : `Retiro de ${goal.name}`,
+          note,
+        },
+      });
+      transactionId = movement.id;
+    }
+
+    const contribution = await tx.goalContribution.create({ data: { goalId, amount, date: now, note, transactionId } });
     const reached = saved + amount >= goal.targetAmount;
     if (reached !== (goal.status === "COMPLETED")) {
       await tx.savingsGoal.update({
@@ -135,10 +173,23 @@ export async function setGoalArchived(db: Db | DbTx, userId: string, id: string,
   });
 }
 
-/** Elimina la meta y su historial de aportes (no afecta ninguna cuenta). */
+/**
+ * Elimina la meta y su historial de aportes. Los movimientos de los aportes que
+ * salieron de una cuenta también se eliminan: ese dinero vuelve a su cuenta.
+ * (Si el dinero ya se usó, lo correcto es archivar la meta, no eliminarla.)
+ */
 export async function deleteGoal(db: Db | DbTx, userId: string, id: string) {
-  await getOwnGoal(db, userId, id);
-  await db.savingsGoal.delete({ where: { id } });
+  return withTx(db, async (tx) => {
+    await getOwnGoal(tx, userId, id);
+    const linked = await tx.goalContribution.findMany({
+      where: { goalId: id, transactionId: { not: null } },
+      select: { transactionId: true },
+    });
+    await tx.savingsGoal.delete({ where: { id } });
+    const ids = linked.map((c) => c.transactionId!);
+    if (ids.length > 0) await tx.transaction.deleteMany({ where: { id: { in: ids }, userId } });
+    return { returnedMovements: ids.length };
+  });
 }
 
 // ---------------------------------------------------------------------------

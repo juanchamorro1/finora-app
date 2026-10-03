@@ -55,7 +55,8 @@ function normalize(text: string): string {
 }
 
 export function isAntCandidate(flow: Flow, threshold: bigint): boolean {
-  if (flow.type !== "EXPENSE") return false;
+  // Un aporte a una meta nunca es un gasto hormiga, aunque sea pequeño.
+  if (flow.type !== "EXPENSE" || flow.savings) return false;
   return flow.amount <= threshold || flow.category.name === ANT_CATEGORY_NAME;
 }
 

@@ -27,6 +27,8 @@ export async function getDashboard(db: Db, userId: string, now: Date = new Date(
     budgets,
     recent,
     goals: goals.filter((g) => g.status === "ACTIVE").slice(0, 3),
+    /** Total guardado en metas (activas y completadas): dinero que ya no está en las cuentas para gastar. */
+    savedInGoals: goals.reduce((sum, g) => sum + g.saved, 0n),
     completedGoals: goals.filter((g) => g.status === "COMPLETED").length,
     chart: byMonth(chartFlows.flows, chartRange),
     excludedCurrencies: chartFlows.excludedCurrencies,

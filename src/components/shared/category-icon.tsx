@@ -1,4 +1,5 @@
 import {
+  PiggyBank,
   ArrowLeftRight,
   Briefcase,
   Bus,
@@ -57,6 +58,7 @@ export const CATEGORY_ICONS: Record<string, LucideIcon> = {
   tag: Tag,
   gift: Gift,
   wallet: Wallet,
+  "piggy-bank": PiggyBank,
   "circle-ellipsis": CircleEllipsis,
   circle: Circle,
 };

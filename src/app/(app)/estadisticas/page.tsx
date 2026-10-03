@@ -54,7 +54,7 @@ export default async function StatisticsPage({ searchParams }: PageProps<"/estad
             <Kpi label="Ingresos"><Money amount={s.totals.income} tone="income" /></Kpi>
             <Kpi label="Gastos"><Money amount={s.totals.expense} /></Kpi>
             <Kpi label="Ahorro" hint={s.totals.income > 0n ? `${s.savingsRate.toLocaleString("es-CO")} % de los ingresos` : undefined}>
-              <Money amount={s.totals.net} tone={s.totals.net < 0n ? "expense" : "default"} />
+              <Money amount={s.totals.savings} tone={s.totals.savings < 0n ? "expense" : "default"} />
             </Kpi>
             <Kpi label="Gasto diario promedio"><Money amount={s.dailyAverage} /></Kpi>
             <Kpi label="Mayor gasto" hint={s.largestExpense ? `${s.largestExpense.description} · ${formatShortDate(s.largestExpense.date)}` : undefined}>

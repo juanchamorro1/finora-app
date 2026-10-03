@@ -15,6 +15,7 @@ const flow = (amount: bigint, description: string, category = comida, day = 10, 
   description,
   accountId: "a",
   category,
+  savings: false,
 });
 
 describe("gastos hormiga", () => {

@@ -47,20 +47,20 @@ enum GoalStatus {
 
 /// Persona que usa Finora. Sus datos son privados.
 model User {
-  id           String   @id @default(cuid())
+  id                String    @id @default(cuid())
   /// Nombre para iniciar sesión (minúsculas, sin espacios).
-  username     String   @unique
+  username          String    @unique
   /// Nombre para mostrar.
-  name         String
+  name              String
   /// "scrypt:<sal>:<hash>". Un valor sin ese formato bloquea el acceso hasta definir contraseña.
-  passwordHash String
+  passwordHash      String
   /// Sube al cambiar la contraseña o al cerrar todas las sesiones: invalida las cookies anteriores.
   sessionVersion    Int       @default(0)
   /// Aceptación de la política de tratamiento de datos (versión y fecha).
   privacyVersion    Int?
   privacyAcceptedAt DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   accounts     Account[]
   categories   Category[]
@@ -83,8 +83,8 @@ model Account {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  transactions      Transaction[]  @relation("TransactionAccount")
-  incomingTransfers Transaction[]  @relation("TransferDestination")
+  transactions      Transaction[] @relation("TransactionAccount")
+  incomingTransfers Transaction[] @relation("TransferDestination")
   goals             SavingsGoal[]
 
   @@unique([userId, name])
@@ -103,6 +103,8 @@ model Category {
   isDefault  Boolean      @default(false)
   isArchived Boolean      @default(false)
   sortOrder  Int          @default(0)
+  /// Categoría del sistema (ej. "goal-saving" para los aportes a metas); null = del usuario.
+  systemKey  String?
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
@@ -110,6 +112,7 @@ model Category {
   budget       Budget?
 
   @@unique([userId, name, kind])
+  @@unique([userId, systemKey])
   @@index([userId])
 }
 
@@ -138,6 +141,9 @@ model Transaction {
   updatedAt   DateTime        @updatedAt
   deletedAt   DateTime?
 
+  /// Si es el movimiento de un aporte/retiro de meta (se gestiona desde Metas).
+  goalContribution GoalContribution?
+
   @@index([userId, date])
   @@index([accountId])
   @@index([toAccountId])
@@ -164,7 +170,7 @@ model SavingsGoal {
   /// Objetivo en COP.
   targetAmount BigInt
   targetDate   DateTime?
-  /// Cuenta donde se guarda el dinero (informativo; los aportes no mueven saldos).
+  /// Cuenta sugerida para los aportes (de ahí sale el dinero por defecto).
   accountId    String?
   account      Account?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
   status       GoalStatus @default(ACTIVE)
@@ -178,14 +184,18 @@ model SavingsGoal {
 }
 
 model GoalContribution {
-  id        String      @id @default(cuid())
-  goalId    String
-  goal      SavingsGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  id            String       @id @default(cuid())
+  goalId        String
+  goal          SavingsGoal  @relation(fields: [goalId], references: [id], onDelete: Cascade)
   /// COP. Positivo = aporte, negativo = retiro de la meta.
-  amount    BigInt
-  date      DateTime
-  note      String?
-  createdAt DateTime    @default(now())
+  amount        BigInt
+  date          DateTime
+  note          String?
+  /// Movimiento que sacó (gasto) o devolvió (ingreso) el dinero de una cuenta.
+  /// Null = dinero que ya estaba aparte (ej. "ya ahorrado" al crear la meta).
+  transactionId String?      @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
 
   @@index([goalId])
 }

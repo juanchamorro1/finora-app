@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Metas" };
 export default async function GoalsPage() {
   const user = await requirePageUser();
   const [goals, accounts] = await Promise.all([listGoals(db, user.id, { includeArchived: true }), listAccounts(db, user.id)]);
-  const accountOptions = accounts.map((a) => ({ id: a.id, name: a.name }));
+  const accountOptions = accounts.map((a) => ({ id: a.id, name: a.name, currency: a.currency, balance: a.balance }));
   const active = goals.filter((g) => g.status === "ACTIVE");
   const completed = goals.filter((g) => g.status === "COMPLETED");
   const archived = goals.filter((g) => g.status === "ARCHIVED");

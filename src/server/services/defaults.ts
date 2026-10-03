@@ -38,3 +38,13 @@ export const DEFAULT_CATEGORIES = [...DEFAULT_EXPENSE_CATEGORIES, ...DEFAULT_INC
 
 /** Umbral por defecto para "gasto pequeño" (COP). */
 export const DEFAULT_ANT_THRESHOLD = 10_000n;
+
+/** Categorías que crea el sistema (identificadas por `systemKey`, no por nombre). */
+export const SYSTEM_CATEGORIES = {
+  /** Gasto: dinero que sale de una cuenta hacia una meta de ahorro. */
+  "goal-saving": { name: "Ahorro para metas", kind: "EXPENSE", icon: "piggy-bank", color: "#0ca678" },
+  /** Ingreso: dinero que vuelve de una meta a una cuenta. */
+  "goal-withdrawal": { name: "Retiro de metas", kind: "INCOME", icon: "piggy-bank", color: "#0ca678" },
+} as const satisfies Record<string, Omit<DefaultCategory, "kind"> & { kind: CategoryKind }>;
+
+export type SystemCategoryKey = keyof typeof SYSTEM_CATEGORIES;

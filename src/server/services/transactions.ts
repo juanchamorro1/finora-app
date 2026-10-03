@@ -102,6 +102,11 @@ async function normalize(
   );
   const categoryChanged = existing?.categoryId !== input.categoryId;
   assertDomain(!category.isArchived || !categoryChanged, `La categoría "${category.name}" está archivada`, "categoryId");
+  assertDomain(
+    !category.systemKey || !categoryChanged,
+    `"${category.name}" se usa solo para los aportes a metas: apórtale desde Metas`,
+    "categoryId",
+  );
 
   const description = input.description?.trim() || category.name;
   assertDomain(description.length <= DESCRIPTION_MAX, `Máximo ${DESCRIPTION_MAX} caracteres`, "description");
@@ -142,15 +147,28 @@ export async function updateTransaction(
     if (existing.type === "OPENING_BALANCE" || existing.type === "ADJUSTMENT") {
       throw new DomainError("Los saldos iniciales y ajustes se modifican desde la cuenta");
     }
+    await assertNotGoalMovement(tx, id);
     const data = await normalize(tx, userId, input, existing);
     return tx.transaction.update({ where: { id }, data, include: transactionInclude });
   });
+}
+
+/** Los aportes y retiros de metas se gestionan desde Metas (para que la meta y la cuenta cuadren). */
+async function assertNotGoalMovement(db: Db | DbTx, transactionId: string) {
+  const contribution = await db.goalContribution.findUnique({
+    where: { transactionId },
+    select: { goal: { select: { name: true } } },
+  });
+  if (contribution) {
+    throw new DomainError(`Este movimiento es de la meta "${contribution.goal.name}": gestiónalo desde Metas`);
+  }
 }
 
 /** Envía el movimiento a la papelera (recuperable). El saldo se recalcula solo. */
 export async function trashTransaction(db: Db, userId: string, id: string) {
   const existing = await db.transaction.findFirst({ where: { id, userId } });
   assertDomain(existing && !existing.deletedAt, "El movimiento no existe o ya está en la papelera");
+  await assertNotGoalMovement(db, id);
   return db.transaction.update({ where: { id }, data: { deletedAt: new Date() } });
 }
 

@@ -17,6 +17,8 @@ export interface CategoryOption {
   icon: string;
   color: string;
   isArchived: boolean;
+  /** Categoría del sistema (aportes a metas): no se elige a mano. */
+  isSystem: boolean;
 }
 
 /** Movimiento listo para mostrar (serializable a componentes cliente). */

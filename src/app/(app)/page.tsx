@@ -27,8 +27,14 @@ export default async function DashboardPage() {
       {/* Encabezado + dinero total */}
       <section className="flex flex-wrap items-end justify-between gap-6">
         <div>
-          <p className="text-sm text-muted-foreground">Dinero total</p>
+          <p className="text-sm text-muted-foreground">Dinero disponible</p>
           <Money amount={d.netWorth.totalBase} className="block text-4xl font-semibold tracking-tight sm:text-5xl" />
+          {d.savedInGoals > 0n && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              + <Money amount={d.savedInGoals} className="font-medium text-foreground" /> ahorrado en{" "}
+              <Link href="/metas" className="underline underline-offset-2">metas</Link>
+            </p>
+          )}
           {d.netWorth.byCurrency.length > 1 && (
             <p className="mt-2 text-sm text-muted-foreground">
               {d.netWorth.byCurrency.map((c) => formatMoney(c.total, c.currency)).join(" · ")}
@@ -59,11 +65,19 @@ export default async function DashboardPage() {
           <Stat label="Ingresos" className="sm:pr-6">
             <Money amount={d.month.income} tone="income" />
           </Stat>
-          <Stat label="Gastos" className="sm:px-6">
+          <Stat
+            label="Gastos"
+            className="sm:px-6"
+            hint={d.month.saved > 0n ? `incluye ${formatMoney(d.month.saved)} apartados en metas` : undefined}
+          >
             <Money amount={d.month.expense} />
           </Stat>
-          <Stat label="Ahorro" className="sm:px-6" hint={d.month.income > 0n ? `${percentOf(d.month.net, d.month.income).toLocaleString("es-CO")} % de tus ingresos` : undefined}>
-            <Money amount={d.month.net} tone={d.month.net < 0n ? "expense" : "default"} />
+          <Stat
+            label="Ahorro"
+            className="sm:px-6"
+            hint={d.month.income > 0n ? `${percentOf(d.month.savings, d.month.income).toLocaleString("es-CO")} % de tus ingresos` : undefined}
+          >
+            <Money amount={d.month.savings} tone={d.month.savings < 0n ? "expense" : "default"} />
           </Stat>
           <Stat
             label="Presupuesto restante"

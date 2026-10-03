@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { deleteGoalAction, setGoalArchivedAction } from "@/server/actions/goals";
 import type { GoalProgress } from "@/server/services/goals";
 import { ProgressBar } from "./goal-progress-bar";
-import { ContributionDialog, GoalDialog } from "./goal-dialogs";
+import { ContributionDialog, GoalDialog, type GoalAccountOption } from "./goal-dialogs";
 
 function timeLeftLabel(days: number): string {
   if (days < 0) return `Venció hace ${Math.abs(days)} ${Math.abs(days) === 1 ? "día" : "días"}`;
@@ -31,7 +31,7 @@ function timeLeftLabel(days: number): string {
   return `Quedan ~${(days / 365).toFixed(1).replace(".", ",")} años`;
 }
 
-export function GoalItem({ goal, accounts }: { goal: GoalProgress; accounts: { id: string; name: string }[] }) {
+export function GoalItem({ goal, accounts }: { goal: GoalProgress; accounts: GoalAccountOption[] }) {
   const [dialog, setDialog] = useState<"add" | "withdraw" | "edit" | "delete" | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const archived = goal.status === "ARCHIVED";
@@ -49,7 +49,9 @@ export function GoalItem({ goal, accounts }: { goal: GoalProgress; accounts: { i
       toast.error(result.error);
       return false;
     }
-    toast.success("Meta eliminada");
+    toast.success(
+      result.data.returnedMovements > 0 ? "Meta eliminada: el dinero aportado volvió a tus cuentas" : "Meta eliminada",
+    );
   }
 
   return (
@@ -171,7 +173,7 @@ export function GoalItem({ goal, accounts }: { goal: GoalProgress; accounts: { i
       )}
 
       {(dialog === "add" || dialog === "withdraw") && (
-        <ContributionDialog goal={goal} direction={dialog} open onOpenChange={(o) => !o && setDialog(null)} />
+        <ContributionDialog goal={goal} direction={dialog} accounts={accounts} open onOpenChange={(o) => !o && setDialog(null)} />
       )}
       {dialog === "edit" && (
         <GoalDialog
@@ -192,7 +194,7 @@ export function GoalItem({ goal, accounts }: { goal: GoalProgress; accounts: { i
         open={dialog === "delete"}
         onOpenChange={(o) => !o && setDialog(null)}
         title={`¿Eliminar la meta "${goal.name}"?`}
-        description="Se borrará la meta y su historial de aportes. Tus cuentas no se modifican. Si solo quieres ocultarla, archívala."
+        description="Se borrará la meta y su historial. Lo que aportaste desde tus cuentas vuelve a ellas. Si ya usaste ese dinero (por ejemplo, ya compraste lo que querías), mejor archívala."
         confirmLabel="Eliminar meta"
         onConfirm={remove}
       />

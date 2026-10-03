@@ -2,7 +2,7 @@ import type { CategoryKind } from "@/generated/prisma/enums";
 import { sameName } from "@/lib/text";
 import type { Db, DbTx } from "../db-client";
 import { DomainError, assertDomain } from "../errors";
-import { DEFAULT_CATEGORIES } from "./defaults";
+import { DEFAULT_CATEGORIES, SYSTEM_CATEGORIES, type SystemCategoryKey } from "./defaults";
 
 /** Categoría del usuario o error "no existe". */
 export async function getOwnCategory(db: Db | DbTx, userId: string, id: string, field?: string) {
@@ -24,6 +24,19 @@ export async function ensureDefaultCategories(db: Db | DbTx, userId: string): Pr
     }
   }
   return created;
+}
+
+/**
+ * Categoría del sistema (ej. la de aportes a metas), creándola si no existe.
+ * Si el usuario ya tenía una con el mismo nombre y tipo, se reutiliza.
+ */
+export async function ensureSystemCategory(db: Db | DbTx, userId: string, key: SystemCategoryKey) {
+  const existing = await db.category.findFirst({ where: { userId, systemKey: key } });
+  if (existing) return existing;
+  const def = SYSTEM_CATEGORIES[key];
+  const sameNamed = await db.category.findUnique({ where: { userId_name_kind: { userId, name: def.name, kind: def.kind } } });
+  if (sameNamed) return db.category.update({ where: { id: sameNamed.id }, data: { systemKey: key, isArchived: false } });
+  return db.category.create({ data: { ...def, userId, systemKey: key, isDefault: true, sortOrder: 1000 } });
 }
 
 export async function listCategories(

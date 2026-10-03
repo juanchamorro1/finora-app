@@ -9,6 +9,10 @@ import { getRateTable, toBase } from "./exchange-rates";
  * inicial positivo, que cuenta como ingreso (categoría "Saldo inicial") en la
  * fecha en que se registró. Las transferencias y los ajustes NUNCA cuentan como
  * ingreso o gasto, ni un saldo inicial negativo (deuda) como gasto.
+ *
+ * Los aportes a metas desde una cuenta son gastos (categoría "Ahorro para metas")
+ * y los retiros, ingresos; se marcan con `savings` para que el "Ahorro" del
+ * periodo no baje al ahorrar (ver `totals`).
  * Todos los montos se expresan en COP (las otras monedas se convierten con la
  * tasa manual; si falta la tasa, el movimiento se excluye y se informa).
  */
@@ -22,6 +26,8 @@ export interface Flow {
   description: string;
   accountId: string;
   category: { id: string; name: string; color: string; icon: string };
+  /** Aporte a una meta (gasto) o retiro de una meta (ingreso). */
+  savings: boolean;
 }
 
 /** Categoría con la que el saldo inicial aparece entre los ingresos. */
@@ -55,7 +61,7 @@ export async function loadFlows(db: Db | DbTx, userId: string, range: DateRange)
         description: true,
         accountId: true,
         account: { select: { currency: true } },
-        category: { select: { id: true, name: true, color: true, icon: true } },
+        category: { select: { id: true, name: true, color: true, icon: true, systemKey: true } },
       },
       orderBy: { date: "asc" },
     }),
@@ -78,7 +84,8 @@ export async function loadFlows(db: Db | DbTx, userId: string, range: DateRange)
       date: r.date,
       description: r.description,
       accountId: r.accountId,
-      category: { ...category },
+      category: { id: category.id, name: category.name, color: category.color, icon: category.icon },
+      savings: !opening && Boolean(r.category?.systemKey),
     });
   }
   return { flows, excludedCurrencies: [...excluded] };
@@ -93,6 +100,10 @@ export interface Totals {
   expense: bigint;
   /** income − expense (puede ser negativo). */
   net: bigint;
+  /** Neto apartado en metas desde cuentas (aportes − retiros); ya incluido en expense/income. */
+  saved: bigint;
+  /** Lo que se ahorró de verdad: net + saved (ahorrar en una meta no lo reduce). */
+  savings: bigint;
   incomeCount: number;
   expenseCount: number;
 }
@@ -102,7 +113,9 @@ export function totals(flows: Flow[]): Totals {
   let expense = 0n;
   let incomeCount = 0;
   let expenseCount = 0;
+  let saved = 0n;
   for (const f of flows) {
+    if (f.savings) saved += f.type === "EXPENSE" ? f.amount : -f.amount;
     if (f.type === "INCOME") {
       income += f.amount;
       incomeCount++;
@@ -111,7 +124,8 @@ export function totals(flows: Flow[]): Totals {
       expenseCount++;
     }
   }
-  return { income, expense, net: income - expense, incomeCount, expenseCount };
+  const net = income - expense;
+  return { income, expense, net, saved, savings: net + saved, incomeCount, expenseCount };
 }
 
 export interface CategoryTotal {

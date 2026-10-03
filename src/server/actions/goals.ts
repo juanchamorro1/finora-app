@@ -62,13 +62,18 @@ const contributionSchema = z.object({
   amount: z.string().trim().min(1, "Ingresa un monto"),
   direction: z.enum(["add", "withdraw"]),
   note: z.string().trim().max(200).optional(),
+  /** Cuenta de donde sale (aporte) o a donde vuelve (retiro) el dinero; null = ninguna. */
+  accountId: z.string().trim().min(1).nullable().default(null),
 });
 
 export async function addContributionAction(input: unknown) {
   return runAction(contributionSchema, input, async (data, userId) => {
     const value = money(data.amount, "amount");
     if (value <= 0n) throw new DomainError("El monto debe ser mayor a 0", "amount");
-    const result = await addContribution(db, userId, data.goalId, data.direction === "add" ? value : -value, { note: data.note });
+    const result = await addContribution(db, userId, data.goalId, data.direction === "add" ? value : -value, {
+      note: data.note,
+      accountId: data.accountId,
+    });
     revalidateAll();
     return { completed: result.completed };
   });
@@ -84,8 +89,8 @@ export async function setGoalArchivedAction(id: string, archived: boolean) {
 
 export async function deleteGoalAction(id: string) {
   return runAction(z.string().min(1), id, async (goalId, userId) => {
-    await deleteGoal(db, userId, goalId);
+    const { returnedMovements } = await deleteGoal(db, userId, goalId);
     revalidateAll();
-    return { id: goalId };
+    return { id: goalId, returnedMovements };
   });
 }

@@ -28,7 +28,7 @@ export async function getStatistics(db: Db, userId: string, range: DateRange, no
     range,
     totals: t,
     /** % de los ingresos que se ahorró (puede ser negativo). */
-    savingsRate: percentOf(t.net, t.income),
+    savingsRate: percentOf(t.savings, t.income),
     dailyAverage: dailyAverageExpense(flows, range, now),
     largestExpense: largestExpense(flows),
     topCategory: expenseCategories[0] ?? null,
