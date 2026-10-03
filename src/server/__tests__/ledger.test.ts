@@ -42,7 +42,7 @@ describe("libro contable", () => {
   });
   afterEach(() => cleanup());
 
-  it("el saldo inicial afecta el saldo pero no es un ingreso", async () => {
+  it("el saldo inicial afecta el saldo y se lista aparte de los ingresos", async () => {
     expect(await computeBalance(db, uid, bancolombia)).toBe(500_000n);
     const incomes = await searchTransactions(db, uid, { type: "INCOME" });
     expect(incomes.total).toBe(0);

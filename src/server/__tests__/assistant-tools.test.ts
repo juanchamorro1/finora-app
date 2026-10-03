@@ -37,7 +37,7 @@ describe("herramientas del asistente", () => {
   it("responde las preguntas de ejemplo con datos reales", async () => {
     expect(await runAssistantTool(db, uid, "get_spending_summary", { period: "this-month" }, now)).toMatchObject({
       expenses: "$123.000",
-      income: "$0",
+      income: "$500.000", // el saldo inicial cuenta como ingreso
     });
     const top = (await runAssistantTool(db, uid, "get_top_expense_categories", {}, now)) as { category: string }[];
     expect(top[0].category).toBe("Comida");

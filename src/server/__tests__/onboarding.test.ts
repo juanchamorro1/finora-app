@@ -44,7 +44,7 @@ describe("configuración inicial", () => {
     const goal = await db.savingsGoal.findFirstOrThrow({ include: { contributions: true } });
     expect(goal.accountId).toBe(accountIds[0]);
     expect(goal.contributions[0].amount).toBe(350_000n);
-    // El saldo inicial no es un ingreso.
+    // En la lista de movimientos el saldo inicial tiene su propio tipo (no aparece filtrando ingresos).
     expect((await searchTransactions(db, uid, { type: "INCOME" })).total).toBe(0);
   });
 

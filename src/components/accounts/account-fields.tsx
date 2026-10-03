@@ -27,7 +27,7 @@ export function AccountFields({
   errors = {},
   showOpeningBalance = true,
   openingBalanceLabel = "Saldo actual",
-  openingBalanceWarning = "Este es el saldo que va a aparecer en la cuenta. Escribe exactamente lo que tienes hoy: no cuenta como ingreso del mes.",
+  openingBalanceWarning = "Este es el saldo que va a aparecer en la cuenta. Escribe exactamente lo que tienes hoy: se suma a los ingresos del mes.",
   currencyLocked = false,
   errorPrefix = "",
 }: {

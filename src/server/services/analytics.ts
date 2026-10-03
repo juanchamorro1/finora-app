@@ -5,8 +5,10 @@ import type { Db, DbTx } from "../db-client";
 import { getRateTable, toBase } from "./exchange-rates";
 
 /**
- * Análisis financiero. Solo INCOME y EXPENSE son flujos reales: las
- * transferencias, saldos iniciales y ajustes NUNCA cuentan como ingreso o gasto.
+ * Análisis financiero. Los flujos son INCOME y EXPENSE, y además el saldo
+ * inicial positivo, que cuenta como ingreso (categoría "Saldo inicial") en la
+ * fecha en que se registró. Las transferencias y los ajustes NUNCA cuentan como
+ * ingreso o gasto, ni un saldo inicial negativo (deuda) como gasto.
  * Todos los montos se expresan en COP (las otras monedas se convierten con la
  * tasa manual; si falta la tasa, el movimiento se excluye y se informa).
  */
@@ -22,6 +24,14 @@ export interface Flow {
   category: { id: string; name: string; color: string; icon: string };
 }
 
+/** Categoría con la que el saldo inicial aparece entre los ingresos. */
+export const OPENING_BALANCE_CATEGORY = {
+  id: "saldo-inicial",
+  name: "Saldo inicial",
+  color: "#1971c2",
+  icon: "wallet",
+} as const;
+
 export interface FlowSet {
   flows: Flow[];
   /** Monedas cuyos movimientos se excluyeron por falta de tasa. */
@@ -31,7 +41,12 @@ export interface FlowSet {
 export async function loadFlows(db: Db | DbTx, userId: string, range: DateRange): Promise<FlowSet> {
   const [rows, rates] = await Promise.all([
     db.transaction.findMany({
-      where: { userId, deletedAt: null, type: { in: ["INCOME", "EXPENSE"] }, date: { gte: range.from, lt: range.to } },
+      where: {
+        userId,
+        deletedAt: null,
+        date: { gte: range.from, lt: range.to },
+        OR: [{ type: { in: ["INCOME", "EXPENSE"] } }, { type: "OPENING_BALANCE", amount: { gt: 0 } }],
+      },
       select: {
         id: true,
         type: true,
@@ -50,18 +65,20 @@ export async function loadFlows(db: Db | DbTx, userId: string, range: DateRange)
   const excluded = new Set<string>();
   for (const r of rows) {
     const amount = toBase(r.amount, r.account.currency, rates);
-    if (amount === null || !r.category) {
+    const opening = r.type === "OPENING_BALANCE";
+    const category = opening ? OPENING_BALANCE_CATEGORY : r.category;
+    if (amount === null || !category) {
       excluded.add(r.account.currency);
       continue;
     }
     flows.push({
       id: r.id,
-      type: r.type as Flow["type"],
+      type: opening ? "INCOME" : (r.type as Flow["type"]),
       amount,
       date: r.date,
       description: r.description,
       accountId: r.accountId,
-      category: r.category,
+      category: { ...category },
     });
   }
   return { flows, excludedCurrencies: [...excluded] };

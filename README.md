@@ -8,7 +8,7 @@ Aplicación de finanzas personales local: cuentas, ingresos, gastos, transferenc
 npm run dev
 ```
 
-Abre <http://localhost:3000>. La primera vez aparece la configuración inicial (cuenta, saldo inicial, categorías y una meta opcional).
+Abre <http://localhost:3000>. La primera vez aparece la configuración inicial (nombre, cuentas con su saldo, límites de gasto, gastos hormiga y una meta opcional).
 
 Tus datos se guardan **solo** en `data/finora.db`. Para hacer una copia de seguridad, cierra la app y copia ese archivo.
 
@@ -69,7 +69,7 @@ src/
 
 - **Dinero sin decimales flotantes:** todos los montos son `BigInt` en unidades mínimas (COP = pesos enteros; USD/USDT = centavos).
 - **El saldo nunca se edita:** se calcula sumando los movimientos de la cuenta. Para corregirlo se registra un *ajuste* visible en el historial.
-- **Tipos de movimiento:** `INCOME` y `EXPENSE` son los únicos que cuentan como ingreso o gasto. `TRANSFER`, `OPENING_BALANCE` (saldo inicial) y `ADJUSTMENT` mueven saldos pero no afectan las estadísticas.
+- **Tipos de movimiento:** `INCOME` y `EXPENSE` cuentan como ingreso o gasto, y el `OPENING_BALANCE` (saldo inicial) positivo cuenta como ingreso (categoría "Saldo inicial") en la fecha en que se registró. `TRANSFER`, `ADJUSTMENT` y un saldo inicial negativo mueven saldos pero no afectan las estadísticas.
 - **Integridad en la base de datos:** CHECK constraints impiden montos inválidos, transferencias a la misma cuenta, gastos sin categoría, etc., aunque se salte la capa de servicios.
 - **Borrado seguro:** los movimientos van a una papelera (restaurable); las cuentas y categorías con historial se desactivan o archivan en vez de borrarse.
 - **Varias monedas:** cada cuenta tiene su moneda; el total en COP usa una tasa manual definida en Ajustes.

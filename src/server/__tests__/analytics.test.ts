@@ -40,12 +40,23 @@ describe("análisis financiero", () => {
   });
   afterEach(() => cleanup());
 
-  it("las transferencias y el saldo inicial no son ingresos ni gastos", async () => {
+  it("el saldo inicial cuenta como ingreso; las transferencias no son ingresos ni gastos", async () => {
     const { flows } = await loadFlows(db, uid, monthRange(2026, 9));
     const t = totals(flows);
-    expect(t.income).toBe(1_000_000n);
+    expect(t.income).toBe(2_000_000n); // 1.000.000 de trabajo + 1.000.000 de saldo inicial
     expect(t.expense).toBe(173_000n);
-    expect(t.net).toBe(827_000n);
+    expect(t.net).toBe(1_827_000n);
+    expect(byCategory(flows, "INCOME").map((c) => [c.name, c.total])).toEqual([
+      ["Saldo inicial", 1_000_000n],
+      ["Trabajo", 1_000_000n],
+    ]);
+  });
+
+  it("un saldo inicial negativo (deuda) no cuenta como gasto", async () => {
+    await createAccount(db, uid, { name: "Tarjeta", type: "OTHER", currency: "COP", openingBalance: -500_000n, openingDate: at("2026-09-02") });
+    const t = totals((await loadFlows(db, uid, monthRange(2026, 9))).flows);
+    expect(t.expense).toBe(173_000n);
+    expect(t.income).toBe(2_000_000n);
   });
 
   it("agrupa por categoría y mes", async () => {
@@ -57,7 +68,7 @@ describe("análisis financiero", () => {
     const months = byMonth(flows, range);
     expect(months.map((m) => [m.month, m.net, m.cumulativeNet])).toEqual([
       ["2026-08", 700_000n, 700_000n],
-      ["2026-09", 827_000n, 1_527_000n],
+      ["2026-09", 1_827_000n, 2_527_000n],
     ]);
     expect(largestExpense(flows)?.amount).toBe(200_000n);
   });
@@ -143,7 +154,7 @@ describe("análisis financiero", () => {
   it("dashboard combina todo", async () => {
     const d = await getDashboard(db, uid, at("2026-09-20"));
     expect(d.netWorth.totalBase).toBe(1_000_000n + 1_900_000n - 373_000n);
-    expect(d.month).toMatchObject({ income: 1_000_000n, expense: 173_000n, net: 827_000n });
+    expect(d.month).toMatchObject({ income: 2_000_000n, expense: 173_000n, net: 1_827_000n });
     expect(d.chart).toHaveLength(6);
     expect(d.chart.at(-1)?.month).toBe("2026-09");
     expect(d.recent[0].type).toBe("EXPENSE");

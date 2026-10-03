@@ -4,7 +4,8 @@
 // - Todos los montos son BigInt en unidades mínimas de la moneda (COP = pesos enteros, USD = centavos).
 // - El saldo de una cuenta NO se almacena: se deriva de sus movimientos (libro contable).
 // - INCOME / EXPENSE / TRANSFER siempre tienen amount > 0; el signo lo da el tipo.
-// - OPENING_BALANCE / ADJUSTMENT llevan signo (≠ 0) y no cuentan como ingreso ni gasto.
+// - OPENING_BALANCE / ADJUSTMENT llevan signo (≠ 0). El saldo inicial positivo cuenta como ingreso en las
+//   estadísticas (services/analytics.ts); el ajuste y el saldo inicial negativo no son ingreso ni gasto.
 // - Los movimientos se eliminan de forma suave (deletedAt) y se pueden restaurar.
 // - Multiusuario: cada usuario ve SOLO sus datos. Los servicios siempre filtran por userId.
 
