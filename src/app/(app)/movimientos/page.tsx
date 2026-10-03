@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { AddTransactionButton } from "@/components/transactions/add-transaction-button";
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
 import { TransactionList } from "@/components/transactions/transaction-list";
+import { TRASH_RETENTION_DAYS } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 import { requirePageUser } from "@/server/auth/guard";
 import { db } from "@/server/db";
@@ -42,7 +43,7 @@ export default async function MovementsPage({ searchParams }: PageProps<"/movimi
         title={filters.trashed ? "Papelera" : "Movimientos"}
         description={
           filters.trashed
-            ? "Movimientos eliminados. No afectan tus saldos hasta que los restaures."
+            ? `Movimientos eliminados. No afectan tus saldos y se borran definitivamente a los ${TRASH_RETENTION_DAYS} días.`
             : `${total} ${total === 1 ? "movimiento" : "movimientos"}${hasQuery ? (total === 1 ? " encontrado" : " encontrados") : ""}`
         }
         actions={

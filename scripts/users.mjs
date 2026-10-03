@@ -12,7 +12,7 @@
 import { createClient } from "@libsql/client";
 import { config } from "dotenv";
 import { randomBytes, randomUUID, scrypt } from "node:crypto";
-import { stdin, stdout } from "node:process";
+import { askHidden, askVisible } from "./prompt.mjs";
 
 const args = process.argv.slice(2);
 const cloud = args.includes("--nube");
@@ -39,58 +39,6 @@ if (!url) {
 const db = createClient({ url, authToken });
 console.log(`[finora] base: ${cloud ? "nube (Turso)" : url}`);
 
-// Lector único de stdin: en una terminal usa modo "raw" para poder ocultar la
-// contraseña; si la entrada viene de otro programa, simplemente lee líneas.
-const isTTY = Boolean(stdin.isTTY);
-let buffer = "";
-let pending = null; // { resolve, hidden, value }
-let skipLF = false; // tras un "\r", ignora el "\n" de un "\r\n"
-stdin.setEncoding("utf8");
-if (isTTY) stdin.setRawMode(true);
-stdin.on("data", (chunk) => {
-  buffer += chunk;
-  drain();
-});
-
-function drain() {
-  while (pending && buffer.length) {
-    const ch = buffer[0];
-    buffer = buffer.slice(1);
-    if (ch === "\u0003") process.exit(1);
-    if (ch === "\n" && skipLF) {
-      skipLF = false;
-      continue;
-    }
-    skipLF = ch === "\r";
-    if (ch === "\r" || ch === "\n") {
-      const { resolve, value } = pending;
-      pending = null;
-      if (isTTY) stdout.write("\n");
-      stdin.pause();
-      resolve(value);
-      return;
-    }
-    if (ch === "\u007f" || ch === "\b") {
-      if (pending.value && isTTY && !pending.hidden) stdout.write("\b \b");
-      pending.value = pending.value.slice(0, -1);
-    } else {
-      pending.value += ch;
-      if (isTTY && !pending.hidden) stdout.write(ch);
-    }
-  }
-}
-
-function ask(question, hidden) {
-  return new Promise((resolve) => {
-    stdout.write(question);
-    pending = { resolve, hidden, value: "" };
-    stdin.resume();
-    drain();
-  });
-}
-
-const askVisible = async (question) => (await ask(question, false)).trim();
-const askHidden = (question) => ask(question, true);
 
 async function askPassword() {
   const password = await askHidden("Contraseña (mínimo 10 caracteres): ");
@@ -129,8 +77,12 @@ try {
     const user = await db.execute({ sql: `SELECT id FROM "User" WHERE username = ?`, args: [target.toLowerCase()] });
     if (!user.rows.length) throw new Error(`No existe el usuario "${target}".`);
     const passwordHash = await askPassword();
-    await db.execute({ sql: `UPDATE "User" SET passwordHash = ?, updatedAt = ? WHERE id = ?`, args: [passwordHash, now(), user.rows[0].id] });
-    console.log(`✓ Contraseña de "${target}" actualizada.`);
+    // Subir sessionVersion cierra todas las sesiones abiertas con la contraseña anterior.
+    await db.execute({
+      sql: `UPDATE "User" SET passwordHash = ?, sessionVersion = sessionVersion + 1, updatedAt = ? WHERE id = ?`,
+      args: [passwordHash, now(), user.rows[0].id],
+    });
+    console.log(`✓ Contraseña de "${target}" actualizada. Se cerraron sus sesiones abiertas.`);
   } else {
     console.log("Uso: npm run users -- <list | add | password <usuario> | secret> [--nube]");
     process.exit(1);

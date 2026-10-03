@@ -20,7 +20,8 @@
     "turso:migrate": "node scripts/turso.mjs migrate",
     "turso:import": "node scripts/turso.mjs import",
     "users": "node scripts/users.mjs",
-    "turso:backup": "node scripts/turso.mjs backup"
+    "turso:backup": "node scripts/turso.mjs backup",
+    "respaldo:descifrar": "node scripts/descifrar-respaldo.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

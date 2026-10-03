@@ -18,11 +18,11 @@ export async function proxy(request: NextRequest) {
   const mode = authMode();
   if (mode === "disabled") return NextResponse.next();
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const userId = mode === "enabled" ? await verifySessionToken(token) : null;
-  if (userId && token) {
+  const claims = mode === "enabled" ? await verifySessionToken(token) : null;
+  if (claims && token) {
     const response = NextResponse.next();
     if (shouldRenewSession(token)) {
-      const { value, expires } = await createSessionToken(userId);
+      const { value, expires } = await createSessionToken(claims.userId, claims.version);
       response.cookies.set(SESSION_COOKIE, value, { ...SESSION_COOKIE_OPTIONS, expires });
     }
     return response;
@@ -37,6 +37,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Todo excepto /login y archivos públicos (estáticos, iconos, manifiesto de la PWA).
-  matcher: ["/((?!login|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sw.js).*)"],
+  // Todo excepto /login, la política de datos y archivos públicos (estáticos, iconos, PWA).
+  matcher: ["/((?!login|politica-de-datos|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sw.js).*)"],
 };

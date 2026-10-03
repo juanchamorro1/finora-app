@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
-import { LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { CategoryManager } from "@/components/settings/category-manager";
+import { PrivacySection } from "@/components/settings/privacy-section";
 import { AntThresholdForm, ExchangeRateForm, ThemeSelector } from "@/components/settings/settings-forms";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { formatDate } from "@/lib/dates";
 import { formatAmountInput, formatRate } from "@/lib/money";
-import { logoutAction } from "@/server/actions/auth";
 import { authMode } from "@/server/auth/session";
 import { requirePageUser } from "@/server/auth/guard";
 import { db } from "@/server/db";
@@ -19,11 +17,12 @@ export const metadata: Metadata = { title: "Ajustes" };
 
 export default async function SettingsPage() {
   const user = await requirePageUser();
-  const [categories, threshold, rates, accounts] = await Promise.all([
+  const [categories, threshold, rates, accounts, privacy] = await Promise.all([
     listCategoriesWithUsage(db, user.id),
     getAntThreshold(db, user.id),
     listExchangeRates(db, user.id),
     db.account.findMany({ where: { userId: user.id }, select: { currency: true } }),
+    db.user.findUnique({ where: { id: user.id }, select: { privacyAcceptedAt: true } }),
   ]);
   const foreign = [...new Set(accounts.map((a) => a.currency).filter((c) => c !== BASE_CURRENCY))];
 
@@ -77,15 +76,16 @@ export default async function SettingsPage() {
           <ThemeSelector />
         </Section>
 
-        {authMode() === "enabled" && (
-          <Section title="Sesión" description="Tu sesión se mantiene abierta en cada dispositivo mientras uses la app.">
-            <form action={logoutAction}>
-              <Button type="submit" variant="outline">
-                <LogOut /> Cerrar sesión
-              </Button>
-            </form>
-          </Section>
-        )}
+        <Section
+          title="Privacidad y tus datos"
+          description="Tus datos son tuyos: puedes descargarlos o eliminarlos cuando quieras."
+        >
+          <PrivacySection
+            username={user.username}
+            acceptedAt={privacy?.privacyAcceptedAt ? formatDate(privacy.privacyAcceptedAt) : null}
+            canLogout={authMode() === "enabled"}
+          />
+        </Section>
       </div>
     </>
   );

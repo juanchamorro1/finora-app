@@ -12,4 +12,5 @@
 - Base: adaptador libSQL (`file:` local o Turso `libsql://` en producción). Local: `data/finora.db`; nube: ver README. Para probar usar `npm run dev:demo` (data/demo.db) — nunca sembrar datos en la base real.
 - Multiusuario con datos privados: TODA consulta y servicio recibe `userId` y filtra por él; los registros por id se buscan con `findFirst({ where: { id, userId } })` (nunca `findUnique({ id })`). `isolation.test.ts` lo verifica: agrega casos al crear servicios nuevos.
 - Auth (`src/server/auth`): cookie firmada con el userId; proxy + `requirePageUser()` en páginas + `runAction` (entrega `userId` a cada acción). Usuarios: `npm run users`.
+- Privacidad: los usuarios deben aceptar la política (`PRIVACY_VERSION`); `requirePageUser()`/`runAction` lo exigen. Al agregar tablas con datos de usuario, inclúyelas en `exportUserData` y `deleteUserAccount` (`services/users.ts`). Respaldos siempre cifrados.
 - Verificar con `npm run typecheck`, `npm run lint`, `npm test` y `npm run build`.

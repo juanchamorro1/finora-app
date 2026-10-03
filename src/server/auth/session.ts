@@ -51,25 +51,41 @@ function safeEqual(a: string, b: string): boolean {
 
 const USER_ID = /^[a-zA-Z0-9_-]{1,64}$/;
 
-/** Crea el valor de la cookie para un usuario. */
-export async function createSessionToken(userId: string, now: number = Date.now()): Promise<{ value: string; expires: Date }> {
-  if (!USER_ID.test(userId)) throw new Error("userId inválido");
-  const expires = now + SESSION_DAYS * 86_400_000;
-  return { value: `${userId}.${expires}.${await hmac(`${userId}:${expires}`)}`, expires: new Date(expires) };
+export interface SessionClaims {
+  userId: string;
+  /** Debe coincidir con User.sessionVersion; si no, la sesión fue revocada. */
+  version: number;
 }
 
-/** Devuelve el userId si la cookie es auténtica y no expiró; si no, null. */
-export async function verifySessionToken(token: string | undefined, now: number = Date.now()): Promise<string | null> {
+/** Crea el valor de la cookie: "<userId>.<versión>.<expira-ms>.<firma>". */
+export async function createSessionToken(
+  userId: string,
+  version: number,
+  now: number = Date.now(),
+): Promise<{ value: string; expires: Date }> {
+  if (!USER_ID.test(userId)) throw new Error("userId inválido");
+  if (!Number.isInteger(version) || version < 0) throw new Error("versión inválida");
+  const expires = now + SESSION_DAYS * 86_400_000;
+  const payload = `${userId}:${version}:${expires}`;
+  return { value: `${userId}.${version}.${expires}.${await hmac(payload)}`, expires: new Date(expires) };
+}
+
+/**
+ * Devuelve los datos de la cookie si es auténtica y no expiró; si no, null.
+ * (La versión se compara con la base de datos en `getCurrentUser`.)
+ */
+export async function verifySessionToken(token: string | undefined, now: number = Date.now()): Promise<SessionClaims | null> {
   if (!token) return null;
-  const [userId, expires, signature, extra] = token.split(".");
-  if (extra !== undefined || !userId || !USER_ID.test(userId) || !expires || !signature) return null;
-  if (!/^\d+$/.test(expires) || Number(expires) < now) return null;
-  return safeEqual(signature, await hmac(`${userId}:${expires}`)) ? userId : null;
+  const [userId, version, expires, signature, extra] = token.split(".");
+  if (extra !== undefined || !userId || !USER_ID.test(userId) || !version || !expires || !signature) return null;
+  if (!/^\d+$/.test(version) || !/^\d+$/.test(expires) || Number(expires) < now) return null;
+  const valid = safeEqual(signature, await hmac(`${userId}:${version}:${expires}`));
+  return valid ? { userId, version: Number(version) } : null;
 }
 
 /** ¿Conviene renovar esta cookie válida? (si se emitió hace más de un día). */
 export function shouldRenewSession(token: string, now: number = Date.now()): boolean {
-  const expires = Number(token.split(".")[1]);
+  const expires = Number(token.split(".")[2]);
   return Number.isFinite(expires) && expires - now < SESSION_DAYS * 86_400_000 - RENEW_AFTER_MS;
 }
 

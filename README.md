@@ -99,6 +99,10 @@ La app se publica en **Vercel** y los datos viven en **Turso** (SQLite en la nub
 
 Desde ese momento la base de la nube es la principal: usa la URL de Vercel también en el PC. Para nuevas migraciones: `npm run db:migrate` (local), `npm run turso:backup` y después `npm run turso:migrate`.
 
+**Respaldos:** `npm run turso:backup` pide una frase y guarda la copia **cifrada** (AES-256-GCM) en `data/`. Para leerla: `npm run respaldo:descifrar -- <archivo>` (con `--guardar` la escribe descifrada; bórrala al terminar).
+
+Variables opcionales para la política de datos: `FINORA_RESPONSABLE` (nombre del responsable) y `FINORA_CONTACTO` (correo para consultas y reclamos).
+
 ## Usuarios
 
 Cada persona tiene su usuario y ve **solo sus propias finanzas** (cuentas, movimientos, metas, presupuestos y ajustes). Las contraseñas se escriben ocultas y se guardan cifradas con scrypt.
@@ -109,4 +113,13 @@ Cada persona tiene su usuario y ve **solo sus propias finanzas** (cuentas, movim
 | `npm run users -- add --nube` | Crea un usuario (pide usuario, nombre y contraseña) |
 | `npm run users -- password <usuario> --nube` | Cambia la contraseña |
 
+Cambiar la contraseña cierra todas las sesiones abiertas de ese usuario.
+
 Sin `--nube` se usa la base local. En local (sin `FINORA_SESSION_SECRET`) la app no pide inicio de sesión y abre con el primer usuario.
+
+## Privacidad (Ley 1581 de 2012, Colombia)
+
+- **Política de tratamiento de datos** pública en `/politica-de-datos`; cada usuario debe aceptarla (autorización previa e informada, incluida la transferencia a EE. UU.) antes de usar la app. Si cambia, sube `PRIVACY_VERSION` en `src/lib/privacy.ts` y todos la aceptan de nuevo.
+- **Derechos del titular** en *Ajustes → Privacidad y tus datos*: descargar todos sus datos (JSON), cerrar sesión en todos los dispositivos y eliminar la cuenta con todos sus datos.
+- **Retención:** la papelera se vacía sola a los 30 días.
+- **Seguridad:** freno de intentos de inicio de sesión guardado en la base (funciona con varios servidores), sesiones revocables (`sessionVersion`) y respaldos cifrados.

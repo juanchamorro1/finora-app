@@ -18,15 +18,18 @@ describe("autenticación", () => {
 
   it("la sesión identifica al usuario y rechaza manipulaciones y expiración", async () => {
     const now = Date.now();
-    const { value } = await createSessionToken("usuario-a", now);
-    expect(await verifySessionToken(value, now)).toBe("usuario-a");
+    const { value } = await createSessionToken("usuario-a", 3, now);
+    expect(await verifySessionToken(value, now)).toEqual({ userId: "usuario-a", version: 3 });
 
-    const [, exp, sig] = value.split(".");
-    // Cambiar el usuario invalida la firma: nadie puede hacerse pasar por otro.
-    expect(await verifySessionToken(`usuario-b.${exp}.${sig}`, now)).toBeNull();
-    expect(await verifySessionToken(`usuario-a.${Number(exp) + 999999}.${sig}`, now)).toBeNull();
+    const [, ver, exp, sig] = value.split(".");
+    // Cambiar el usuario, la versión o la expiración invalida la firma.
+    expect(await verifySessionToken(`usuario-b.${ver}.${exp}.${sig}`, now)).toBeNull();
+    expect(await verifySessionToken(`usuario-a.4.${exp}.${sig}`, now)).toBeNull();
+    expect(await verifySessionToken(`usuario-a.${ver}.${Number(exp) + 999999}.${sig}`, now)).toBeNull();
     const tampered = sig.slice(0, -1) + (sig.endsWith("A") ? "B" : "A");
-    expect(await verifySessionToken(`usuario-a.${exp}.${tampered}`, now)).toBeNull();
+    expect(await verifySessionToken(`usuario-a.${ver}.${exp}.${tampered}`, now)).toBeNull();
+    // Formato anterior (sin versión) ya no es válido.
+    expect(await verifySessionToken(`usuario-a.${exp}.${sig}`, now)).toBeNull();
     expect(await verifySessionToken(`${value}.extra`, now)).toBeNull();
     expect(await verifySessionToken(value, Number(exp) + 1)).toBeNull();
     expect(await verifySessionToken(undefined, now)).toBeNull();
@@ -36,7 +39,7 @@ describe("autenticación", () => {
 
   it("la sesión dura 6 meses y se renueva como máximo una vez al día", async () => {
     const now = Date.now();
-    const { value, expires } = await createSessionToken("usuario-a", now);
+    const { value, expires } = await createSessionToken("usuario-a", 0, now);
     expect(Math.round((expires.getTime() - now) / 86_400_000)).toBe(180);
     expect(shouldRenewSession(value, now)).toBe(false);
     expect(shouldRenewSession(value, now + 3_600_000)).toBe(false);

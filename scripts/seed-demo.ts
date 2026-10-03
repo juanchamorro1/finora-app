@@ -6,6 +6,7 @@
  *   npm run dev:demo      → abre la app con esa base en http://localhost:3001
  */
 import { createDb } from "../src/server/db-client";
+import { PRIVACY_VERSION } from "../src/lib/privacy";
 import { addDays, localMidnight, localParts } from "../src/lib/dates";
 import { createAccount } from "../src/server/services/accounts";
 import { setBudget } from "../src/server/services/budgets";
@@ -41,7 +42,9 @@ async function main() {
   const noon = (d: Date) => new Date(d.getTime() + 12 * 3_600_000);
 
   // Usuario de demostración (sin contraseña utilizable; en local no se pide inicio de sesión).
-  const uid = (await db.user.create({ data: { username: "demo", name: "Demo", passwordHash: "DEMO" } })).id;
+  const uid = (await db.user.create({
+    data: { username: "demo", name: "Demo", passwordHash: "DEMO", privacyVersion: PRIVACY_VERSION, privacyAcceptedAt: new Date() },
+  })).id;
   await ensureDefaultCategories(db, uid);
   const cat = Object.fromEntries((await db.category.findMany({ where: { userId: uid } })).map((c) => [`${c.kind}:${c.name}`, c.id]));
   const bank = (await createAccount(db, uid, { name: "Bancolombia", type: "BANK", currency: "COP", openingBalance: 850_000n, openingDate: start })).id;

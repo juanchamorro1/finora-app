@@ -6,7 +6,7 @@
  *   TURSO_DATABASE_URL=libsql://<tu-base>.turso.io
  *   TURSO_AUTH_TOKEN=<token>
  *
- *   npm run turso:backup           copia de seguridad de la nube en data/ (JSON)
+ *   npm run turso:backup           copia de seguridad CIFRADA de la nube en data/
  *   npm run turso:migrate          aplica las migraciones pendientes
  *   npm run turso:import           copia data/finora.db a Turso (solo si Turso está vacía)
  */
@@ -15,6 +15,8 @@ import Database from "better-sqlite3";
 import { config } from "dotenv";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { encryptBackup } from "./backup-crypto.mjs";
+import { askHidden } from "./prompt.mjs";
 
 config({ path: ".env.turso", quiet: true });
 const url = process.env.TURSO_DATABASE_URL;
@@ -76,17 +78,24 @@ async function importLocal(file = "data/finora.db") {
   console.log("✓ datos copiados:", counts);
 }
 
-/** Copia de seguridad completa de la nube en data/respaldo-nube-<fecha>.json. */
+/**
+ * Copia de seguridad completa de la nube, CIFRADA con una frase que eliges
+ * (data/respaldo-nube-<fecha>.cifrado.json). Para leerla: npm run respaldo:descifrar.
+ */
 async function backup() {
+  const passphrase = await askHidden("Frase para cifrar el respaldo (mínimo 12 caracteres): ");
+  if (passphrase.length < 12) throw new Error("La frase debe tener al menos 12 caracteres.");
+  if ((await askHidden("Repítela: ")) !== passphrase) throw new Error("Las frases no coinciden.");
   const tables = (await remote.execute(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)).rows.map((r) => r.name);
   const dump = { createdAt: new Date().toISOString(), tables: {} };
   for (const table of tables) {
     const { rows, columns } = await remote.execute(`SELECT * FROM "${table}"`);
     dump.tables[table] = rows.map((r) => Object.fromEntries(columns.map((c, i) => [c, typeof r[i] === "bigint" ? r[i].toString() : r[i]])));
   }
-  const file = `data/respaldo-nube-${dump.createdAt.replace(/[:.]/g, "-")}.json`;
-  writeFileSync(file, JSON.stringify(dump, null, 2));
-  console.log(`✓ respaldo guardado en ${file}:`, Object.fromEntries(Object.entries(dump.tables).map(([t, r]) => [t, r.length])));
+  const file = `data/respaldo-nube-${dump.createdAt.replace(/[:.]/g, "-")}.cifrado.json`;
+  writeFileSync(file, encryptBackup(JSON.stringify(dump), passphrase));
+  console.log(`✓ respaldo CIFRADO guardado en ${file}. Guarda la frase: sin ella no se puede recuperar.`);
+  console.log("  contenido:", Object.fromEntries(Object.entries(dump.tables).map(([t, r]) => [t, r.length])));
 }
 
 try {

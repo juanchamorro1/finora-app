@@ -8,6 +8,7 @@ import { toAccountOption, toCategoryOption } from "@/server/mappers";
 import { listAccounts } from "@/server/services/accounts";
 import { listCategories } from "@/server/services/categories";
 import { isOnboardingCompleted } from "@/server/services/settings";
+import { purgeExpiredTrash } from "@/server/services/users";
 
 // Datos financieros: siempre frescos, nunca prerenderizados.
 export const dynamic = "force-dynamic";
@@ -15,6 +16,8 @@ export const dynamic = "force-dynamic";
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requirePageUser();
   if (!(await isOnboardingCompleted(db, user.id))) redirect("/bienvenida");
+  // Retención: la papelera se vacía sola a los 30 días.
+  await purgeExpiredTrash(db, user.id);
 
   const [accounts, categories] = await Promise.all([
     listAccounts(db, user.id, { includeInactive: true }),
