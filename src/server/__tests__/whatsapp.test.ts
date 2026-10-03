@@ -171,6 +171,16 @@ describe("WhatsApp", () => {
     expect(await computeBalance(db, uid, nequi)).toBe(50_000n);
   });
 
+  it("con Haiku no envía opciones que ese modelo no acepta", async () => {
+    await linkTestPhone(db, uid);
+    const { client, requests } = fakeClaude([{ content: [text("Hola")] }]);
+    const { runAssistant } = await import("../assistant/agent");
+    await runAssistant({ db, userId: uid, userName: "Juan", history: [], message: "hola", client, model: "claude-haiku-4-5" });
+    expect(requests[0].model).toBe("claude-haiku-4-5");
+    expect(requests[0]).not.toHaveProperty("fallbacks");
+    expect(requests[0]).not.toHaveProperty("output_config");
+  });
+
   it("retención: borra mensajes de más de 30 días", async () => {
     await linkTestPhone(db, uid);
     const { client } = fakeClaude([{ content: [text("Hola")] }]);

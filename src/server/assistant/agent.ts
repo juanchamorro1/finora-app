@@ -45,6 +45,18 @@ function systemPrompt(userName: string, now: Date): string {
   ].join("\n");
 }
 
+/** Opciones que solo aceptan los modelos actuales (Haiku 4.5 rechaza `effort` y `fallbacks`). */
+function modelOptions(model: string): Partial<Anthropic.Beta.MessageCreateParamsNonStreaming> {
+  if (model.startsWith("claude-haiku")) return {};
+  return {
+    // Chat corto: poco esfuerzo basta y responde más rápido.
+    output_config: { effort: "low" },
+    // Si un clasificador de seguridad rechaza, el servidor reintenta con otro modelo.
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+  };
+}
+
 export interface AssistantTurn {
   role: "user" | "assistant";
   text: string;
@@ -78,11 +90,7 @@ export async function runAssistant(opts: {
     const response = await client.beta.messages.create({
       model,
       max_tokens: 8000,
-      // Chat corto: poco esfuerzo basta y responde más rápido.
-      output_config: { effort: "low" },
-      // Si un clasificador de seguridad rechaza, el servidor reintenta con otro modelo.
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
+      ...modelOptions(model),
       system,
       tools,
       messages,
