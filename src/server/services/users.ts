@@ -143,10 +143,10 @@ function plain<T>(value: T): unknown {
  * Los montos se exportan como texto en unidades mínimas (COP = pesos).
  */
 export async function exportUserData(db: Db, userId: string, now: Date = new Date()) {
-  const [user, accounts, categories, transactions, budgets, goals, rates, settings] = await Promise.all([
+  const [user, accounts, categories, transactions, budgets, goals, rates, settings, whatsapp] = await Promise.all([
     db.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { username: true, name: true, createdAt: true, privacyVersion: true, privacyAcceptedAt: true },
+      select: { username: true, name: true, createdAt: true, privacyVersion: true, privacyAcceptedAt: true, whatsappPhone: true },
     }),
     db.account.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     db.category.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
@@ -155,6 +155,7 @@ export async function exportUserData(db: Db, userId: string, now: Date = new Dat
     db.savingsGoal.findMany({ where: { userId }, include: { contributions: true } }),
     db.exchangeRate.findMany({ where: { userId } }),
     db.setting.findMany({ where: { userId } }),
+    db.whatsAppMessage.findMany({ where: { userId }, orderBy: { createdAt: "asc" }, select: { role: true, text: true, createdAt: true } }),
   ]);
   // El id interno del usuario no aporta nada al titular: se omite.
   const strip = <R extends { userId?: string }>(rows: R[]) =>
@@ -170,6 +171,7 @@ export async function exportUserData(db: Db, userId: string, now: Date = new Dat
     metas: strip(goals),
     tasasDeCambio: strip(rates),
     ajustes: strip(settings),
+    mensajesWhatsApp: whatsapp,
   }) as Record<string, unknown>;
 }
 
@@ -193,6 +195,7 @@ export async function deleteUserAccount(db: Db, userId: string, confirmUsername:
     await tx.account.deleteMany({ where: { userId } });
     await tx.exchangeRate.deleteMany({ where: { userId } });
     await tx.setting.deleteMany({ where: { userId } });
+    await tx.whatsAppMessage.deleteMany({ where: { userId } });
     await tx.loginAttempt.deleteMany({ where: { username: user.username } });
     await tx.user.delete({ where: { id: userId } });
   });

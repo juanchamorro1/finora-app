@@ -51,6 +51,9 @@ export default function PrivacyPolicyPage() {
               presupuestos, metas de ahorro, tasas de cambio y preferencias.
             </li>
             <li>La fecha en que aceptaste esta política.</li>
+            <li>
+              Solo si activas el asistente de WhatsApp: tu número de WhatsApp y los mensajes que intercambias con el asistente.
+            </li>
           </ul>
           <p className="mt-2">
             No pedimos documentos de identidad, números de tarjetas ni claves bancarias, y la app no se conecta a tus bancos.
@@ -79,10 +82,17 @@ export default function PrivacyPolicyPage() {
             <li>
               <strong>Vercel</strong> (Vercel Inc.): servidor donde funciona la app.
             </li>
+            <li>
+              Solo si activas el asistente de WhatsApp: <strong>WhatsApp</strong> (Meta Platforms Inc.), que transmite los
+              mensajes, y <strong>Anthropic</strong> (Anthropic PBC), cuya inteligencia artificial (Claude) interpreta tus
+              mensajes y consulta o registra tus movimientos. Para responder, el asistente usa tu nombre, tus mensajes y los
+              datos financieros que necesite (por ejemplo, saldos o gastos del mes). El asistente es opcional y puedes
+              desactivarlo cuando quieras.
+            </li>
           </ul>
           <p className="mt-2">
             Estados Unidos es considerado por la Superintendencia de Industria y Comercio (SIC) un país con nivel adecuado de
-            protección de datos. Ambos proveedores se rigen por sus propios acuerdos de tratamiento de datos y cifran la
+            protección de datos. Estos proveedores se rigen por sus propios acuerdos de tratamiento de datos y cifran la
             información en tránsito. Al aceptar esta política autorizas esta transferencia.
           </p>
         </section>
@@ -115,6 +125,10 @@ export default function PrivacyPolicyPage() {
           <ul>
             <li>Mientras tu cuenta exista.</li>
             <li>Los movimientos que envías a la papelera se borran definitivamente a los {TRASH_RETENTION_DAYS} días.</li>
+            <li>
+              Los mensajes del asistente de WhatsApp se borran de Finora a los 30 días, o de inmediato si desvinculas tu número.
+              WhatsApp y Anthropic los conservan según sus propias políticas.
+            </li>
             <li>Si eliminas tu cuenta, todos tus datos se borran de inmediato y de forma definitiva de la base de datos.</li>
             <li>Las copias de seguridad cifradas se eliminan cuando dejan de ser necesarias.</li>
           </ul>

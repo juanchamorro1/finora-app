@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
 import { CategoryManager } from "@/components/settings/category-manager";
 import { PrivacySection } from "@/components/settings/privacy-section";
+import { WhatsAppSection } from "@/components/settings/whatsapp-section";
 import { AntThresholdForm, ExchangeRateForm, ThemeSelector } from "@/components/settings/settings-forms";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { formatDate } from "@/lib/dates";
@@ -9,6 +10,10 @@ import { formatAmountInput, formatRate } from "@/lib/money";
 import { authMode } from "@/server/auth/session";
 import { requirePageUser } from "@/server/auth/guard";
 import { db } from "@/server/db";
+import { readEnv } from "@/server/env";
+import { isAssistantConfigured } from "@/server/assistant/agent";
+import { isWhatsAppConfigured } from "@/server/whatsapp/cloud-api";
+import { getWhatsAppStatus } from "@/server/services/whatsapp";
 import { listCategoriesWithUsage } from "@/server/services/categories";
 import { listExchangeRates } from "@/server/services/exchange-rates";
 import { getAntThreshold } from "@/server/services/settings";
@@ -17,12 +22,13 @@ export const metadata: Metadata = { title: "Ajustes" };
 
 export default async function SettingsPage() {
   const user = await requirePageUser();
-  const [categories, threshold, rates, accounts, privacy] = await Promise.all([
+  const [categories, threshold, rates, accounts, privacy, whatsapp] = await Promise.all([
     listCategoriesWithUsage(db, user.id),
     getAntThreshold(db, user.id),
     listExchangeRates(db, user.id),
     db.account.findMany({ where: { userId: user.id }, select: { currency: true } }),
     db.user.findUnique({ where: { id: user.id }, select: { privacyAcceptedAt: true } }),
+    getWhatsAppStatus(db, user.id),
   ]);
   const foreign = [...new Set(accounts.map((a) => a.currency).filter((c) => c !== BASE_CURRENCY))];
 
@@ -70,6 +76,15 @@ export default async function SettingsPage() {
               })}
             </div>
           )}
+        </Section>
+
+        <Section title="WhatsApp" description="Tu asistente de Finora en WhatsApp: registra y consulta escribiendo como hablas.">
+          <WhatsAppSection
+            available={isWhatsAppConfigured() && isAssistantConfigured()}
+            botNumber={readEnv("WHATSAPP_DISPLAY_NUMBER") ?? null}
+            linkedPhone={whatsapp.phone}
+            pendingCode={whatsapp.pendingCode?.code ?? null}
+          />
         </Section>
 
         <Section title="Apariencia">

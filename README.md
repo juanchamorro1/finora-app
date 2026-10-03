@@ -119,9 +119,20 @@ Cambiar la contraseña cierra todas las sesiones abiertas de ese usuario.
 
 Sin `--nube` se usa la base local. En local (sin `FINORA_SESSION_SECRET`) la app no pide inicio de sesión y abre con el primer usuario.
 
+## Asistente por WhatsApp
+
+Cada usuario puede vincular su WhatsApp (*Ajustes → WhatsApp*) y escribir como habla: "gasté 8 mil en papitas con Nequi", "¿cuánto llevo este mes?", "deshaz lo último". Claude (Anthropic) interpreta el mensaje y usa las herramientas de `src/server/assistant/tools.ts`, que llaman a los mismos servicios que la app (con `userId`).
+
+- Flujo: Meta → `POST /api/whatsapp` (firma `X-Hub-Signature-256` verificada) → responde 200 y procesa con `after()` → `whatsapp/handler.ts` → `assistant/agent.ts` → respuesta por la Graph API.
+- Vinculación: código de 6 dígitos (10 min) generado en Ajustes y enviado como `vincular 123456`; consentimiento explícito; `desvincular` lo quita.
+- Mensajes guardados 30 días (contexto y freno de duplicados); de números sin vincular no se guarda el texto.
+- Modelo: `claude-opus-5-5` (cámbialo con `FINORA_ASSISTANT_MODEL`), esfuerzo bajo, con *fallback* del servidor.
+
+Variables en Vercel: `ANTHROPIC_API_KEY`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` (la eliges tú), `WHATSAPP_DISPLAY_NUMBER` (ej. `+57 300 123 4567`). En Meta, el webhook es `https://<tu-app>/api/whatsapp` suscrito al campo `messages`.
+
 ## Privacidad (Ley 1581 de 2012, Colombia)
 
 - **Política de tratamiento de datos** pública en `/politica-de-datos`; cada usuario debe aceptarla (autorización previa e informada, incluida la transferencia a EE. UU.) antes de usar la app. Si cambia, sube `PRIVACY_VERSION` en `src/lib/privacy.ts` y todos la aceptan de nuevo.
 - **Derechos del titular** en *Ajustes → Privacidad y tus datos*: descargar todos sus datos (JSON), cerrar sesión en todos los dispositivos y eliminar la cuenta con todos sus datos.
-- **Retención:** la papelera se vacía sola a los 30 días.
+- **Retención:** la papelera se vacía sola a los 30 días; los mensajes de WhatsApp también.
 - **Seguridad:** freno de intentos de inicio de sesión guardado en la base (funciona con varios servidores), sesiones revocables (`sessionVersion`) y respaldos cifrados.

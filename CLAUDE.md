@@ -13,4 +13,5 @@
 - Multiusuario con datos privados: TODA consulta y servicio recibe `userId` y filtra por él; los registros por id se buscan con `findFirst({ where: { id, userId } })` (nunca `findUnique({ id })`). `isolation.test.ts` lo verifica: agrega casos al crear servicios nuevos.
 - Auth (`src/server/auth`): cookie firmada con el userId; proxy + `requirePageUser()` en páginas + `runAction` (entrega `userId` a cada acción). Usuarios: `npm run users`.
 - Privacidad: los usuarios deben aceptar la política (`PRIVACY_VERSION`); `requirePageUser()`/`runAction` lo exigen. Al agregar tablas con datos de usuario, inclúyelas en `exportUserData` y `deleteUserAccount` (`services/users.ts`). Respaldos siempre cifrados.
+- Asistente/WhatsApp: las herramientas del asistente (`src/server/assistant/tools.ts`) usan los servicios con `userId`, nunca consultas propias sin filtrar. La conversación con Claude dentro de un mensaje es de solo-agregar (preserved thinking); entre mensajes solo se guarda texto.
 - Verificar con `npm run typecheck`, `npm run lint`, `npm test` y `npm run build`.

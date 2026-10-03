@@ -59,15 +59,18 @@ model User {
   /// Aceptación de la política de tratamiento de datos (versión y fecha).
   privacyVersion    Int?
   privacyAcceptedAt DateTime?
+  /// Número de WhatsApp vinculado (solo dígitos con indicativo, ej. "573001234567"); null = sin vincular.
+  whatsappPhone     String?   @unique
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  accounts     Account[]
-  categories   Category[]
-  transactions Transaction[]
-  goals        SavingsGoal[]
-  rates        ExchangeRate[]
-  settings     Setting[]
+  accounts         Account[]
+  categories       Category[]
+  transactions     Transaction[]
+  goals            SavingsGoal[]
+  rates            ExchangeRate[]
+  settings         Setting[]
+  whatsappMessages WhatsAppMessage[]
 }
 
 model Account {
@@ -229,4 +232,21 @@ model LoginAttempt {
   failures    Int       @default(0)
   lockedUntil DateTime?
   updatedAt   DateTime  @updatedAt
+}
+
+/// Mensajes del asistente por WhatsApp: contexto de la conversación y freno de duplicados
+/// (Meta reintenta los webhooks). Se borran a los 30 días o al desvincular el número.
+model WhatsAppMessage {
+  /// Id del mensaje de WhatsApp (entrantes) o generado (respuestas).
+  id        String   @id
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone     String
+  /// "user" o "assistant".
+  role      String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }

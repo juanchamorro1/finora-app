@@ -33,6 +33,10 @@ export default async function AcceptPrivacyPage({ searchParams }: PageProps<"/pr
           • Se guarda en servidores en <strong>Estados Unidos</strong> (Turso y Vercel).
         </li>
         <li>• Ningún otro usuario puede verla. El administrador técnico solo accede cuando es necesario.</li>
+        <li>
+          • Si activas el asistente de WhatsApp (opcional), tus mensajes pasan por WhatsApp (Meta) y por Claude (Anthropic),
+          también en Estados Unidos.
+        </li>
         <li>• Puedes descargar tus datos o eliminar tu cuenta cuando quieras, desde Ajustes.</li>
       </ul>
 
