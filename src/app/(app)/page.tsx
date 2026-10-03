@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Plus } from "lucide-react";
+import { ArrowRight, ChevronDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CreateAccountDialog } from "@/components/accounts/account-dialogs";
 import { IncomeExpenseChart } from "@/components/charts/income-expense-chart";
@@ -30,10 +30,30 @@ export default async function DashboardPage() {
           <p className="text-sm text-muted-foreground">Dinero disponible</p>
           <Money amount={d.netWorth.totalBase} className="block text-4xl font-semibold tracking-tight sm:text-5xl" />
           {d.savedInGoals > 0n && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              + <Money amount={d.savedInGoals} className="font-medium text-foreground" /> ahorrado en{" "}
-              <Link href="/metas" className="underline underline-offset-2">metas</Link>
-            </p>
+            // Se abre y se cierra sin JavaScript (<details>).
+            <details className="group mt-2 text-sm">
+              <summary className="flex w-fit cursor-pointer list-none items-center gap-1 text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+                + <Money amount={d.savedInGoals} className="font-medium text-foreground" /> ahorrado en metas
+                <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+                <span className="sr-only">Ver el total</span>
+              </summary>
+              <dl className="mt-3 flex w-full max-w-xs flex-col gap-1.5 rounded-lg border px-4 py-3">
+                <div className="flex justify-between gap-6">
+                  <dt className="text-muted-foreground">Disponible</dt>
+                  <dd><Money amount={d.netWorth.totalBase} /></dd>
+                </div>
+                <div className="flex justify-between gap-6">
+                  <dt className="text-muted-foreground">
+                    Ahorrado en <Link href="/metas" className="underline underline-offset-2">metas</Link>
+                  </dt>
+                  <dd><Money amount={d.savedInGoals} /></dd>
+                </div>
+                <div className="flex justify-between gap-6 border-t pt-1.5 font-semibold">
+                  <dt>Total</dt>
+                  <dd><Money amount={d.netWorth.totalBase + d.savedInGoals} /></dd>
+                </div>
+              </dl>
+            </details>
           )}
           {d.netWorth.byCurrency.length > 1 && (
             <p className="mt-2 text-sm text-muted-foreground">
