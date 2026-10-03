@@ -1,17 +1,21 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireActionUser } from "../auth/guard";
 import { verifyPassword } from "../auth/password";
-import { SESSION_COOKIE, SESSION_COOKIE_OPTIONS, authMode, createSessionToken } from "../auth/session";
+import { SESSION_COOKIE, SESSION_COOKIE_OPTIONS, authMode, createSessionToken, registrationOpen } from "../auth/session";
 import { db } from "../db";
+import { DomainError } from "../errors";
 import {
   acceptPrivacyPolicy,
   clearLoginFailures,
+  createUser,
   deleteUserAccount,
   isLoginLocked,
+  isRegistrationLimited,
+  recordRegistration,
   registerLoginFailure,
   revokeAllSessions,
 } from "../services/users";
@@ -45,6 +49,50 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
   }
 
   await clearLoginFailures(db, username);
+  const { value, expires } = await createSessionToken(user.id, user.sessionVersion);
+  (await cookies()).set(SESSION_COOKIE, value, { ...SESSION_COOKIE_OPTIONS, expires });
+  redirect("/");
+}
+
+export type RegisterState =
+  | { error?: string; fieldErrors?: Record<string, string>; values?: { name: string; username: string } }
+  | undefined;
+
+/** IP del visitante (Vercel la pone en x-forwarded-for). */
+async function clientIp(): Promise<string> {
+  const h = await headers();
+  return h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "local";
+}
+
+/** Registro público: crea el usuario e inicia su sesión. Luego acepta la política y configura su cuenta. */
+export async function registerAction(_prev: RegisterState, formData: FormData): Promise<RegisterState> {
+  if (!registrationOpen()) return { error: "El registro de usuarios nuevos está cerrado." };
+  const values = {
+    name: String(formData.get("name") ?? "").slice(0, 60),
+    username: String(formData.get("username") ?? "").trim().toLowerCase().slice(0, 40),
+  };
+  const password = String(formData.get("password") ?? "");
+  // Campo trampa invisible: solo un bot lo llena.
+  if (String(formData.get("sitio") ?? "") !== "") return { values, error: "No se pudo crear la cuenta." };
+  if (password !== String(formData.get("confirm") ?? "")) {
+    return { values, fieldErrors: { confirm: "Las contraseñas no coinciden" } };
+  }
+  const ip = await clientIp();
+  if (await isRegistrationLimited(db, ip)) {
+    return { values, error: "Se crearon demasiadas cuentas desde esta conexión. Intenta más tarde." };
+  }
+
+  let user: { id: string; sessionVersion: number };
+  try {
+    user = await createUser(db, { ...values, password });
+  } catch (error) {
+    if (error instanceof DomainError) {
+      return { values, error: error.field ? undefined : error.message, fieldErrors: error.field ? { [error.field]: error.message } : undefined };
+    }
+    console.error("[finora] error al registrar usuario:", error);
+    return { values, error: "Ocurrió un error inesperado. Intenta de nuevo." };
+  }
+  await recordRegistration(db, ip);
   const { value, expires } = await createSessionToken(user.id, user.sessionVersion);
   (await cookies()).set(SESSION_COOKIE, value, { ...SESSION_COOKIE_OPTIONS, expires });
   redirect("/");

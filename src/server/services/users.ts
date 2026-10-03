@@ -1,6 +1,78 @@
 import { PRIVACY_VERSION, TRASH_RETENTION_DAYS } from "@/lib/privacy";
+import { hashPassword } from "../auth/password";
 import { withTx, type Db, type DbTx } from "../db-client";
-import { assertDomain } from "../errors";
+import { DomainError, assertDomain } from "../errors";
+
+// ---------------------------------------------------------------------------
+// Registro de usuarios nuevos
+// ---------------------------------------------------------------------------
+
+export const USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
+export const MIN_PASSWORD_LENGTH = 10;
+/** Cuentas nuevas permitidas por dirección IP y por hora (freno contra bots). */
+export const MAX_REGISTRATIONS_PER_HOUR = 5;
+
+export interface NewUserInput {
+  username: string;
+  name: string;
+  password: string;
+}
+
+/**
+ * Crea un usuario con contraseña. La política de datos se acepta después,
+ * en /privacidad/aceptar, antes de poder usar la app.
+ */
+export async function createUser(db: Db | DbTx, input: NewUserInput) {
+  const username = input.username.trim().toLowerCase();
+  const name = input.name.trim();
+  assertDomain(name.length > 0, "Escribe tu nombre", "name");
+  assertDomain(name.length <= 40, "Máximo 40 caracteres", "name");
+  assertDomain(
+    USERNAME_PATTERN.test(username),
+    "Usa de 3 a 30 caracteres: letras minúsculas, números, punto, guion o guion bajo",
+    "username",
+  );
+  assertDomain(
+    input.password.length >= MIN_PASSWORD_LENGTH,
+    `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`,
+    "password",
+  );
+  assertDomain(input.password.length <= 200, "La contraseña es demasiado larga", "password");
+  const taken = () => new DomainError("Ese usuario ya existe. Prueba con otro.", "username");
+  if (await db.user.findUnique({ where: { username } })) throw taken();
+  const passwordHash = await hashPassword(input.password);
+  try {
+    return await db.user.create({ data: { username, name, passwordHash }, select: { id: true, sessionVersion: true } });
+  } catch (error) {
+    // Dos registros simultáneos con el mismo usuario: gana el primero.
+    if ((error as { code?: string }).code === "P2002") throw taken();
+    throw error;
+  }
+}
+
+const registrationKey = (ip: string) => `registro:${ip.slice(0, 100)}`;
+
+/** ¿Esta IP ya creó demasiadas cuentas en la última hora? */
+export async function isRegistrationLimited(db: Db | DbTx, ip: string, now: Date = new Date()): Promise<boolean> {
+  const row = await db.loginAttempt.findUnique({ where: { username: registrationKey(ip) } });
+  return Boolean(row?.lockedUntil && row.lockedUntil > now && row.failures >= MAX_REGISTRATIONS_PER_HOUR);
+}
+
+/** Cuenta un registro de esta IP dentro de una ventana de una hora. */
+export async function recordRegistration(db: Db | DbTx, ip: string, now: Date = new Date()) {
+  const key = registrationKey(ip);
+  const row = await db.loginAttempt.findUnique({ where: { username: key } });
+  if (row?.lockedUntil && row.lockedUntil > now) {
+    await db.loginAttempt.update({ where: { username: key }, data: { failures: { increment: 1 } } });
+  } else {
+    const windowEnd = new Date(now.getTime() + 3_600_000);
+    await db.loginAttempt.upsert({
+      where: { username: key },
+      create: { username: key, failures: 1, lockedUntil: windowEnd },
+      update: { failures: 1, lockedUntil: windowEnd },
+    });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Política de datos y sesiones

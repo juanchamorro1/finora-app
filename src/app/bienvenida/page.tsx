@@ -4,7 +4,7 @@ import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 import { requirePageUser } from "@/server/auth/guard";
 import { authMode } from "@/server/auth/session";
 import { db } from "@/server/db";
-import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from "@/server/services/defaults";
+import { DEFAULT_EXPENSE_CATEGORIES } from "@/server/services/defaults";
 import { isOnboardingCompleted } from "@/server/services/settings";
 
 export const metadata: Metadata = { title: "Bienvenida" };
@@ -16,8 +16,8 @@ export default async function WelcomePage() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col px-4 py-10 sm:py-16">
       <OnboardingWizard
-        expenseDefaults={DEFAULT_EXPENSE_CATEGORIES}
-        incomeDefaults={DEFAULT_INCOME_CATEGORIES}
+        userName={user.name === "Yo" ? "" : user.name}
+        budgetCategories={DEFAULT_EXPENSE_CATEGORIES.filter((c) => c.name !== "Otros")}
         canLogout={authMode() === "enabled"}
       />
     </main>

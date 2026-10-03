@@ -12,11 +12,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { AmountInput } from "@/components/shared/amount-input";
 import type { FieldErrors } from "@/lib/action-result";
-import { formatAmountInput, formatMoney } from "@/lib/money";
-import { createAccountAction, reconcileAccountAction, updateAccountAction } from "@/server/actions/accounts";
+import { formatAmountInput, formatMoney, parseMoney } from "@/lib/money";
+import { createAccountAction, updateAccountAction } from "@/server/actions/accounts";
 import type { AccountOption } from "@/types/finance";
 import { AccountFields, type AccountFieldValues } from "./account-fields";
 
@@ -93,6 +91,15 @@ export function EditAccountDialog({
   const [errors, setErrors] = useState<FieldErrors>({});
   const [pending, startTransition] = useTransition();
 
+  // Saldo que mostrará la cuenta con el saldo inicial escrito (el resto de movimientos no cambia).
+  let preview: bigint | null = null;
+  try {
+    const typed = values.openingBalance ? parseMoney(values.openingBalance, values.currency) : 0n;
+    preview = account.balance - openingBalance + (negativeOpening ? -typed : typed);
+  } catch {
+    preview = null;
+  }
+
   function submit() {
     startTransition(async () => {
       const opening = values.openingBalance && negativeOpening ? `-${values.openingBalance}` : values.openingBalance;
@@ -130,78 +137,21 @@ export function EditAccountDialog({
             onChange={setValues}
             errors={errors}
             openingBalanceLabel={negativeOpening ? "Saldo inicial (negativo)" : "Saldo inicial"}
-            openingBalanceHint="El saldo actual se recalcula con todos los movimientos. Para cuadrar con el banco usa Ajustar saldo."
+            openingBalanceWarning={
+              preview === null ? (
+                "El saldo que aparece en la cuenta es este saldo inicial más tus ingresos y menos tus gastos."
+              ) : (
+                <>
+                  Con este saldo inicial, la cuenta va a mostrar{" "}
+                  <strong className="font-semibold">{formatMoney(preview, values.currency)}</strong>
+                  {hasTransactions ? " (saldo inicial + tus movimientos)." : "."}
+                </>
+              )
+            }
             currencyLocked={hasTransactions}
           />
           <DialogFooter>
             <Button type="submit" disabled={pending}>{pending ? "Guardando…" : "Guardar"}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** Ajusta el saldo al valor real registrando un movimiento de ajuste (trazable). */
-export function ReconcileDialog({
-  account,
-  open,
-  onOpenChange,
-}: {
-  account: AccountOption;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const [value, setValue] = useState(formatAmountInput(account.balance, account.currency));
-  const [error, setError] = useState<string>();
-  const [pending, startTransition] = useTransition();
-
-  function submit() {
-    startTransition(async () => {
-      const result = await reconcileAccountAction(account.id, value);
-      if (!result.ok) {
-        setError(result.fieldErrors?.amount ?? result.fieldErrors?.actualBalance ?? result.error);
-        return;
-      }
-      toast.success(result.data.adjusted ? "Saldo ajustado" : "El saldo ya coincidía");
-      onOpenChange(false);
-    });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Ajustar saldo de {account.name}</DialogTitle>
-          <DialogDescription>
-            Saldo en Finora: {formatMoney(account.balance, account.currency)}. Si tu saldo real es otro, se registrará
-            un ajuste por la diferencia (no cuenta como ingreso ni gasto).
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-          className="flex flex-col gap-6"
-        >
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="reconcile-amount">Saldo real</Label>
-            <AmountInput
-              id="reconcile-amount"
-              currency={account.currency}
-              value={value}
-              onChange={(v) => {
-                setValue(v);
-                setError(undefined);
-              }}
-              invalid={Boolean(error)}
-              autoFocus
-            />
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-          <DialogFooter>
-            <Button type="submit" disabled={pending}>{pending ? "Ajustando…" : "Ajustar saldo"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

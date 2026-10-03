@@ -18,7 +18,7 @@ import { Money } from "@/components/shared/money";
 import { cn } from "@/lib/utils";
 import { deleteAccountAction, setAccountActiveAction } from "@/server/actions/accounts";
 import { ACCOUNT_TYPE_LABELS, type AccountOption } from "@/types/finance";
-import { EditAccountDialog, ReconcileDialog } from "./account-dialogs";
+import { EditAccountDialog } from "./account-dialogs";
 
 const TYPE_ICONS = {
   BANK: Building2,
@@ -41,7 +41,7 @@ export function AccountRow({
   /** Equivalente en COP para cuentas en otra moneda (null si falta tasa). */
   balanceBase: bigint | null;
 }) {
-  const [dialog, setDialog] = useState<"edit" | "reconcile" | "delete" | "deactivate" | null>(null);
+  const [dialog, setDialog] = useState<"edit" | "delete" | "deactivate" | null>(null);
   const Icon = TYPE_ICONS[account.type];
 
   async function toggleActive() {
@@ -93,7 +93,6 @@ export function AccountRow({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => setDialog("edit")}>Editar</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setDialog("reconcile")}>Ajustar saldo</DropdownMenuItem>
           <DropdownMenuItem render={<Link href={`/movimientos?account=${account.id}`} />}>Ver movimientos</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setDialog("deactivate")}>
@@ -109,9 +108,6 @@ export function AccountRow({
 
       {dialog === "edit" && (
         <EditAccountDialog account={account} openingBalance={openingBalance} hasTransactions={transactionCount > 0} open onOpenChange={(o) => !o && setDialog(null)} />
-      )}
-      {dialog === "reconcile" && (
-        <ReconcileDialog account={account} open onOpenChange={(o) => !o && setDialog(null)} />
       )}
       <ConfirmDialog
         open={dialog === "deactivate"}

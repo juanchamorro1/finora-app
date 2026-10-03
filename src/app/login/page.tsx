@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 import { getCurrentUser } from "@/server/auth/guard";
-import { authMode } from "@/server/auth/session";
+import { authMode, registrationOpen } from "@/server/auth/session";
 
 export const metadata: Metadata = { title: "Iniciar sesión" };
 export const dynamic = "force-dynamic";
@@ -25,7 +25,15 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         </p>
       )}
       <LoginForm misconfigured={authMode() === "misconfigured"} />
-      <p className="mt-6 text-center text-xs text-muted-foreground">
+      {registrationOpen() && (
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          ¿No tienes cuenta?{" "}
+          <Link href="/registro" className="font-medium text-foreground underline underline-offset-4">
+            Crea una
+          </Link>
+        </p>
+      )}
+      <p className="mt-3 text-center text-xs text-muted-foreground">
         <Link href="/politica-de-datos" className="underline underline-offset-4">
           Política de tratamiento de datos
         </Link>

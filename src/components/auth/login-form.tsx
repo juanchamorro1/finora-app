@@ -22,6 +22,8 @@ export function LoginForm({ misconfigured }: { misconfigured: boolean }) {
           spellCheck={false}
           autoFocus
           required
+          // La clave recrea el campo al volver del servidor (Base UI no admite cambiar defaultValue).
+          key={`username-${state?.username ?? ""}`}
           defaultValue={state?.username}
           className="h-10"
         />

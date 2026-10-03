@@ -10,8 +10,6 @@ import { DomainError } from "../errors";
 import {
   createAccount,
   deleteAccount,
-  getOwnAccount,
-  reconcileBalance,
   setAccountActive,
   updateAccount,
 } from "../services/accounts";
@@ -64,16 +62,6 @@ export async function setAccountActiveAction(id: string, isActive: boolean) {
     await setAccountActive(db, userId, d.id, d.isActive);
     revalidateAll();
     return { id: d.id };
-  });
-}
-
-export async function reconcileAccountAction(id: string, actualBalance: string) {
-  const schema = z.object({ id: z.string().min(1), actualBalance: z.string().trim().min(1, "Ingresa el saldo real") });
-  return runAction(schema, { id, actualBalance }, async (d, userId) => {
-    const account = await getOwnAccount(db, userId, d.id);
-    const adjustment = await reconcileBalance(db, userId, d.id, parseMoney(d.actualBalance, account.currency));
-    revalidateAll();
-    return { adjusted: adjustment !== null };
   });
 }
 

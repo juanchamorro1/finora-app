@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+import { TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,7 +27,7 @@ export function AccountFields({
   errors = {},
   showOpeningBalance = true,
   openingBalanceLabel = "Saldo actual",
-  openingBalanceHint = "Se registra como saldo inicial: no cuenta como ingreso del mes.",
+  openingBalanceWarning = "Este es el saldo que va a aparecer en la cuenta. Escribe exactamente lo que tienes hoy: no cuenta como ingreso del mes.",
   currencyLocked = false,
   errorPrefix = "",
 }: {
@@ -34,7 +36,8 @@ export function AccountFields({
   errors?: FieldErrors;
   showOpeningBalance?: boolean;
   openingBalanceLabel?: string;
-  openingBalanceHint?: string;
+  /** Aviso visible bajo el saldo (qué saldo mostrará la cuenta). */
+  openingBalanceWarning?: ReactNode;
   currencyLocked?: boolean;
   errorPrefix?: string;
 }) {
@@ -103,13 +106,20 @@ export function AccountFields({
             onChange={(v) => set("openingBalance", v)}
             invalid={Boolean(err("openingBalance"))}
           />
-          {err("openingBalance") ? (
-            <p className="text-sm text-destructive">{err("openingBalance")}</p>
-          ) : (
-            <p className="text-xs text-muted-foreground">{openingBalanceHint}</p>
-          )}
+          {err("openingBalance") && <p className="text-sm text-destructive">{err("openingBalance")}</p>}
+          <BalanceWarning>{openingBalanceWarning}</BalanceWarning>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Aviso destacado sobre el saldo que mostrará la cuenta. */
+export function BalanceWarning({ children }: { children: ReactNode }) {
+  return (
+    <div role="note" className="flex gap-2 rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-foreground">
+      <TriangleAlert className="mt-px size-4 shrink-0 text-warning" aria-hidden />
+      <div>{children}</div>
     </div>
   );
 }

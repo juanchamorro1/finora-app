@@ -115,6 +115,8 @@ Cada persona tiene su usuario y ve **solo sus propias finanzas** (cuentas, movim
 
 Cambiar la contraseña cierra todas las sesiones abiertas de ese usuario.
 
+**Registro público:** cualquiera puede crear su cuenta en `/registro` (enlace "Crea una" en el inicio de sesión). Después acepta la política de datos y pasa por la configuración inicial. Freno: máximo 5 cuentas nuevas por IP y por hora. Para cerrarlo, define `FINORA_REGISTRO=cerrado` en Vercel y vuelve a desplegar.
+
 Sin `--nube` se usa la base local. En local (sin `FINORA_SESSION_SECRET`) la app no pide inicio de sesión y abre con el primer usuario.
 
 ## Privacidad (Ley 1581 de 2012, Colombia)

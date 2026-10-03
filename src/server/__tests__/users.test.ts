@@ -6,13 +6,18 @@ import { ensureDefaultCategories } from "../services/categories";
 import { createGoal, addContribution } from "../services/goals";
 import { setBudget } from "../services/budgets";
 import { createTransaction, trashTransaction } from "../services/transactions";
+import { verifyPassword } from "../auth/password";
 import {
+  MAX_REGISTRATIONS_PER_HOUR,
   acceptPrivacyPolicy,
   clearLoginFailures,
+  createUser,
   deleteUserAccount,
   exportUserData,
   isLoginLocked,
+  isRegistrationLimited,
   purgeExpiredTrash,
+  recordRegistration,
   registerLoginFailure,
   revokeAllSessions,
 } from "../services/users";
@@ -96,5 +101,36 @@ describe("privacidad, sesiones y derechos del titular", () => {
     // El otro usuario queda intacto.
     expect(await db.transaction.count({ where: { userId: otro } })).toBe(2);
     expect(await db.budget.count({ where: { category: { userId: otro } } })).toBe(1);
+  });
+
+  it("registra usuarios nuevos con contraseña cifrada y sin política aceptada", async () => {
+    const user = await createUser(db, { username: " Maria.Gomez ", name: " María ", password: "una-clave-larga" });
+    const saved = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(saved.username).toBe("maria.gomez");
+    expect(saved.name).toBe("María");
+    expect(saved.privacyVersion).toBeNull();
+    expect(saved.passwordHash).not.toContain("una-clave-larga");
+    expect(await verifyPassword("una-clave-larga", saved.passwordHash)).toBe(true);
+  });
+
+  it("valida usuario, nombre y contraseña, y no repite usuarios", async () => {
+    const ok = { username: "nuevo", name: "Nuevo", password: "0123456789" };
+    await expect(createUser(db, { ...ok, username: "a b" })).rejects.toMatchObject({ field: "username" });
+    await expect(createUser(db, { ...ok, name: "  " })).rejects.toMatchObject({ field: "name" });
+    await expect(createUser(db, { ...ok, password: "corta" })).rejects.toMatchObject({ field: "password" });
+    await createUser(db, ok);
+    await expect(createUser(db, { ...ok, username: "NUEVO" })).rejects.toThrow(/ya existe/);
+    await expect(createUser(db, { ...ok, username: "prueba" })).rejects.toThrow(/ya existe/);
+  });
+
+  it("limita las cuentas nuevas por IP durante una hora", async () => {
+    const now = new Date();
+    for (let i = 0; i < MAX_REGISTRATIONS_PER_HOUR; i++) {
+      expect(await isRegistrationLimited(db, "1.2.3.4", now)).toBe(false);
+      await recordRegistration(db, "1.2.3.4", now);
+    }
+    expect(await isRegistrationLimited(db, "1.2.3.4", now)).toBe(true);
+    expect(await isRegistrationLimited(db, "5.6.7.8", now)).toBe(false);
+    expect(await isRegistrationLimited(db, "1.2.3.4", new Date(now.getTime() + 3_601_000))).toBe(false);
   });
 });

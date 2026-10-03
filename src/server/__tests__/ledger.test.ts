@@ -6,7 +6,6 @@ import {
   createAccount,
   getNetWorth,
   listAccounts,
-  reconcileBalance,
   setAccountActive,
   setOpeningBalance,
   updateAccount,
@@ -134,13 +133,6 @@ describe("libro contable", () => {
     await trashTransaction(db, uid, tx.id);
     await purgeTransaction(db, uid, tx.id);
     expect((await searchTransactions(db, uid, { trashed: true })).total).toBe(0);
-  });
-
-  it("el ajuste de saldo cuadra la cuenta sin afectar ingresos/gastos", async () => {
-    await reconcileBalance(db, uid, bancolombia, 480_000n, today);
-    expect(await computeBalance(db, uid, bancolombia)).toBe(480_000n);
-    expect((await searchTransactions(db, uid, { type: "EXPENSE" })).total).toBe(0);
-    expect(await reconcileBalance(db, uid, bancolombia, 480_000n, today)).toBeNull();
   });
 
   it("el saldo inicial se puede modificar y el saldo actual se recalcula", async () => {

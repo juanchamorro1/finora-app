@@ -2,8 +2,9 @@
  * Sesiones firmadas con HMAC-SHA256 (cookie "<userId>.<expira-ms>.<firma>").
  * Usa Web Crypto para funcionar igual en el proxy y en el servidor.
  *
- * Variable de entorno:
+ * Variables de entorno:
  *   FINORA_SESSION_SECRET  secreto aleatorio (≥ 32 caracteres) para firmar la cookie.
+ *   FINORA_REGISTRO        "cerrado" desactiva el registro público (/registro).
  *
  * Sin secreto, en desarrollo la app no pide contraseña (usa el primer usuario).
  * En producción el secreto es obligatorio: sin él la app se niega a abrir.
@@ -23,6 +24,11 @@ export function authMode(): AuthMode {
   const secret = readEnv("FINORA_SESSION_SECRET");
   if (!secret) return process.env.NODE_ENV === "production" ? "misconfigured" : "disabled";
   return secret.length >= 32 ? "enabled" : "misconfigured";
+}
+
+/** ¿Cualquiera puede crear una cuenta en /registro? (abierto salvo FINORA_REGISTRO=cerrado). */
+export function registrationOpen(): boolean {
+  return authMode() === "enabled" && readEnv("FINORA_REGISTRO")?.toLowerCase() !== "cerrado";
 }
 
 const encoder = new TextEncoder();

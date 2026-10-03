@@ -5,7 +5,7 @@ import { sameName } from "@/lib/text";
 import { withTx, type Db, type DbTx } from "../db-client";
 import { DomainError, assertDomain } from "../errors";
 import { getRateTable, toBase } from "./exchange-rates";
-import { computeBalance, computeBalances } from "./ledger";
+import { computeBalances } from "./ledger";
 
 export interface AccountWithBalance {
   id: string;
@@ -217,22 +217,6 @@ export async function setOpeningBalance(db: Db | DbTx, userId: string, id: strin
 export async function setAccountActive(db: Db, userId: string, id: string, isActive: boolean) {
   await getOwnAccount(db, userId, id);
   return db.account.update({ where: { id }, data: { isActive } });
-}
-
-/**
- * Registra un ajuste para que el saldo coincida con el real (ej. el banco dice X).
- * Queda como movimiento ADJUSTMENT visible en el historial; no es ingreso ni gasto.
- */
-export async function reconcileBalance(db: Db, userId: string, id: string, actualBalance: bigint, date: Date = new Date()) {
-  await getOwnAccount(db, userId, id);
-  return withTx(db, async (tx) => {
-    const current = await computeBalance(tx, userId, id);
-    const diff = actualBalance - current;
-    if (diff === 0n) return null;
-    return tx.transaction.create({
-      data: { userId, type: "ADJUSTMENT", amount: diff, accountId: id, date, description: "Ajuste de saldo" },
-    });
-  });
 }
 
 /** Solo se elimina una cuenta sin ningún movimiento (ni en la papelera); si no, se desactiva. */

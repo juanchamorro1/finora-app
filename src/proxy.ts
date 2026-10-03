@@ -37,6 +37,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Todo excepto /login, la política de datos y archivos públicos (estáticos, iconos, PWA).
-  matcher: ["/((?!login|politica-de-datos|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sw.js).*)"],
+  // Todo excepto /login, /registro, la política de datos y archivos públicos (estáticos, iconos, PWA).
+  matcher: ["/((?!login|registro|politica-de-datos|_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sw.js).*)"],
 };
