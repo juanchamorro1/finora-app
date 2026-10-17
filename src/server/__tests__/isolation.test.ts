@@ -54,6 +54,8 @@ describe("aislamiento entre usuarios", () => {
     const dash = await getDashboard(db, mama);
     expect(dash.recent.map((t) => t.account.id)).toEqual([mamaAccount]);
     expect(dash.goals).toEqual([]);
+    // El cuadre del mes solo suma las cuentas de cada uno.
+    expect(dash.breakdown.map((c) => c.end)).toEqual([80_000n]);
   });
 
   it("los nombres pueden repetirse entre usuarios", async () => {

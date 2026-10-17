@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, ChevronDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CreateAccountDialog } from "@/components/accounts/account-dialogs";
+import { BalanceBreakdown } from "@/components/dashboard/balance-breakdown";
 import { IncomeExpenseChart } from "@/components/charts/income-expense-chart";
 import { ProgressBar } from "@/components/goals/goal-progress-bar";
 import { Money } from "@/components/shared/money";
@@ -103,6 +104,7 @@ export default async function DashboardPage() {
             )}
           </Stat>
         </dl>
+        <BalanceBreakdown items={d.breakdown} />
       </section>
 
       <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_18rem]">

@@ -2,6 +2,7 @@ import { currentMonthRange, localMidnight, localParts } from "@/lib/dates";
 import type { Db } from "../db-client";
 import { getNetWorth } from "./accounts";
 import { byMonth, loadFlows, totals } from "./analytics";
+import { balanceBreakdown } from "./balance-breakdown";
 import { getBudgetSummary } from "./budgets";
 import { listGoals } from "./goals";
 import { recentTransactions } from "./transactions";
@@ -12,11 +13,12 @@ export async function getDashboard(db: Db, userId: string, now: Date = new Date(
   const { year, month: m } = localParts(now);
   const chartRange = { from: localMidnight(year, m - 5, 1), to: month.to };
 
-  const [netWorth, chartFlows, recent, goals] = await Promise.all([
+  const [netWorth, chartFlows, recent, goals, breakdown] = await Promise.all([
     getNetWorth(db, userId),
     loadFlows(db, userId, chartRange),
     recentTransactions(db, userId, 6),
     listGoals(db, userId, { now }),
+    balanceBreakdown(db, userId, month),
   ]);
   const monthFlows = chartFlows.flows.filter((f) => f.date >= month.from && f.date < month.to);
   const budgets = await getBudgetSummary(db, userId, monthFlows);
@@ -24,6 +26,8 @@ export async function getDashboard(db: Db, userId: string, now: Date = new Date(
   return {
     netWorth,
     month: { range: month, ...totals(monthFlows) },
+    /** Cómo cuadra el saldo este mes, por moneda (saldo al empezar + ingresos − gastos ± ajustes). */
+    breakdown,
     budgets,
     recent,
     goals: goals.filter((g) => g.status === "ACTIVE").slice(0, 3),
